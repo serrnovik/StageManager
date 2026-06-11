@@ -71,7 +71,8 @@
                             </i:Interaction.Triggers>
                             <!-- Windows -->
                             <ItemsControl
-                                ItemsSource="{Binding Windows}">
+                                x:Name="previewItems"
+                                ItemsSource="{Binding DisplayWindows}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <Grid
@@ -88,6 +89,49 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <Border
+                                x:Name="overflowPreview"
+                                Width="220"
+                                Height="104"
+                                Visibility="Collapsed"
+                                ClipToBounds="True"
+                                Background="#E8FFFFFF"
+                                BorderBrush="#AAFFFFFF"
+                                BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect
+                                        BlurRadius="20"
+                                        Opacity="0.45" />
+                                </Border.Effect>
+                                <ItemsControl
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    ItemsSource="{Binding DisplayWindows}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel
+                                                Width="172"
+                                                Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border
+                                                Margin="4">
+                                                <Border.Effect>
+                                                    <DropShadowEffect
+                                                        BlurRadius="10"
+                                                        Opacity="0.4" />
+                                                </Border.Effect>
+                                                <Image
+                                                    Width="24"
+                                                    Height="24"
+                                                    Source="{Binding Icon}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
                             <!-- Icons -->
                             <StackPanel
                                 Orientation="Horizontal"
@@ -96,16 +140,18 @@
                                 <ItemsControl
                                     VerticalAlignment="Center"
                                     HorizontalAlignment="Center"
-                                    ItemsSource="{Binding Windows}">
+                                    ItemsSource="{Binding DisplayWindows}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <StackPanel
+                                            <WrapPanel
+                                                MaxWidth="188"
                                                 Orientation="Horizontal" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border>
+                                            <Border
+                                                Margin="1">
                                                 <Border.Effect>
                                                     <DropShadowEffect
                                                         BlurRadius="20" />
@@ -138,7 +184,7 @@
                             </StackPanel>
                         </StackPanel>
                         <Popup
-                            AllowsTransparency="True"
+                            AllowsTransparency="False"
                             IsOpen="{Binding IsWindowPickerOpen, Mode=TwoWay}"
                             Placement="Right"
                             PlacementTarget="{Binding ElementName=sceneRoot}"
@@ -155,7 +201,7 @@
                                         Opacity="0.35" />
                                 </Border.Effect>
                                 <ItemsControl
-                                    ItemsSource="{Binding Windows}">
+                                    ItemsSource="{Binding DisplayWindows}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel
@@ -200,6 +246,20 @@
                             </Border>
                         </Popup>
                     </Grid>
+                    <DataTemplate.Triggers>
+                        <DataTrigger
+                            Binding="{Binding IsOverflowGroup}"
+                            Value="True">
+                            <Setter
+                                TargetName="previewItems"
+                                Property="Visibility"
+                                Value="Collapsed" />
+                            <Setter
+                                TargetName="overflowPreview"
+                                Property="Visibility"
+                                Value="Visible" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

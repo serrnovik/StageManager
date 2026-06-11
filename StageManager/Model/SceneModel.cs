@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -11,6 +12,8 @@ namespace StageManager.Model
 		public event PropertyChangedEventHandler PropertyChanged;
 		private bool _isVisible;
 		private bool _isWindowPickerOpen;
+		private bool _isOverflowGroup;
+		private string _overflowTitle = "More windows";
 		private Scene _scene;
 
 		public static SceneModel FromScene(Scene scene)
@@ -18,13 +21,49 @@ namespace StageManager.Model
 			var model = new SceneModel();
 			model.Id = scene.Id;
 			model.Windows = new ObservableCollection<WindowModel>(scene.Windows.Select(w => new WindowModel(w)));
+			model.UpdateDisplayWindows(_ => true);
 			model.Scene = scene;
 			return model;
+		}
+
+		public static SceneModel CreateOverflowGroup()
+		{
+			return new SceneModel
+			{
+				Id = Guid.Empty,
+				_isOverflowGroup = true,
+				IsVisible = true
+			};
 		}
 
 		public SceneModel()
 		{
 			Updated = DateTime.UtcNow;
+			RaisePropertyChanged(nameof(HasMultipleWindows));
+		}
+
+		public void UpdateDisplayWindows(Func<WindowModel, bool> predicate)
+		{
+			var displayWindows = Windows.Where(predicate).ToArray();
+
+			for (int i = 0; i < displayWindows.Length; i++)
+			{
+				if (DisplayWindows.Count > i && DisplayWindows[i].Handle == displayWindows[i].Handle)
+					continue;
+
+				var windowToMove = DisplayWindows.FirstOrDefault(w => w.Handle == displayWindows[i].Handle);
+				if (windowToMove is object)
+					DisplayWindows.Move(DisplayWindows.IndexOf(windowToMove), i);
+				else
+					DisplayWindows.Insert(i, displayWindows[i]);
+			}
+
+			for (int i = DisplayWindows.Count - 1; i >= 0; i--)
+			{
+				if (!displayWindows.Any(w => w.Handle == DisplayWindows[i].Handle))
+					DisplayWindows.RemoveAt(i);
+			}
+
 			RaisePropertyChanged(nameof(HasMultipleWindows));
 		}
 
@@ -71,6 +110,24 @@ namespace StageManager.Model
 			}
 
 			Updated = DateTime.UtcNow;
+			UpdateDisplayWindows(_ => true);
+			RaisePropertyChanged(nameof(HasMultipleWindows));
+		}
+
+		public void UpdateOverflowWindows(IEnumerable<SceneModel> scenes, string title)
+		{
+			if (!IsOverflowGroup)
+				throw new NotSupportedException();
+
+			Windows.Clear();
+			foreach (var window in scenes.SelectMany(s => s.DisplayWindows))
+				Windows.Add(window);
+
+			_overflowTitle = title;
+			UpdateDisplayWindows(_ => true);
+			Updated = DateTime.UtcNow;
+			RaisePropertyChanged(nameof(Title));
+			RaisePropertyChanged(nameof(HasMultipleWindows));
 		}
 
 		private void Scene_SelectedChanged(object? sender, EventArgs e)
@@ -95,9 +152,11 @@ namespace StageManager.Model
 			}
 		}
 
-		public string Title => Scene?.Title ?? "";
+		public string Title => IsOverflowGroup ? _overflowTitle : Scene?.Title ?? "";
 
-		public bool HasMultipleWindows => Windows.Count > 1;
+		public bool HasMultipleWindows => IsOverflowGroup || DisplayWindows.Count > 1;
+
+		public bool IsOverflowGroup => _isOverflowGroup;
 
 		public bool IsVisible
 		{
@@ -136,5 +195,7 @@ namespace StageManager.Model
 		public System.Windows.Visibility Visibility => IsVisible ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
 
 		public ObservableCollection<WindowModel> Windows { get; set; } = new ObservableCollection<WindowModel>();
+
+		public ObservableCollection<WindowModel> DisplayWindows { get; } = new ObservableCollection<WindowModel>();
 	}
 }

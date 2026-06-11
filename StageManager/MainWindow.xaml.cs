@@ -31,6 +31,8 @@ namespace StageManager
 		private const int TIMERINTERVAL_MILLISECONDS = 500;
 		private const int MIN_VISIBLE_SCENES = 1;
 		private const int FALLBACK_VISIBLE_SCENES = 6;
+		private const int MAX_OVERFLOW_GROUPS = 4;
+		private const int OVERFLOW_TARGET_GROUP_SIZE = 3;
 		private const double SCENE_SLOT_HEIGHT = 158.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
@@ -43,6 +45,7 @@ namespace StageManager
 		private Point _mouse = new Point(0, 0);
 		private SceneModel _removedCurrentScene;
 		private SceneModel _mouseDownScene;
+		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private bool _isStageManagerEnabled;
 
@@ -59,8 +62,15 @@ namespace StageManager
 
 			SwitchSceneCommand = new ActionCommand(async model =>
 			{
+				var sceneModel = (SceneModel)model;
+				if (sceneModel.IsOverflowGroup)
+				{
+					ToggleSceneWindowPicker(sceneModel);
+					return;
+				}
+
 				CloseWindowPickers();
-				await SceneManager!.SwitchTo(((SceneModel)model).Scene);
+				await SceneManager!.SwitchTo(sceneModel.Scene);
 			});
 			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
 			ActivateWindowCommand = new ActionCommand(async model => await ActivateWindow((WindowModel)model));
@@ -103,6 +113,7 @@ namespace StageManager
 
 			UpdateVisibleSceneCapacity();
 			AddInitialScenes();
+			SyncVisibilityByUpdatedTimeStamp();
 
 			var foreground = Win32.GetForegroundWindow();
 			var foregroundScene = SceneManager.FindSceneForWindow(foreground);
@@ -174,6 +185,7 @@ namespace StageManager
 					case ChangeType.Updated:
 						if (AllScenes.FirstOrDefault(s => s.Id == e.Scene.Id) is SceneModel toUpdate)
 							toUpdate.UpdateFromScene(e.Scene);
+						SyncVisibilityByUpdatedTimeStamp();
 						break;
 					case ChangeType.Removed:
 						if (AllScenes.FirstOrDefault(s => s.Id == e.Scene.Id) is SceneModel toRemove)
@@ -226,14 +238,14 @@ namespace StageManager
 				{
 					var sceneModel = FindSceneByPoint(screenPoint);
 
-					if (sceneModel is object)
+					if (sceneModel is object && !sceneModel.IsOverflowGroup)
 						SceneManager.MoveWindow(foregroundWindow, sceneModel.Scene).SafeFireAndForget();
 				});
 			}
 
 			if (EnableWindowPullToScene)
 			{
-				if (e.Data.X > _lastWidth && _mouseDownScene is object)
+				if (e.Data.X > _lastWidth && _mouseDownScene is object && !_mouseDownScene.IsOverflowGroup)
 				{
 					this.Dispatcher.Invoke(() =>
 					{
@@ -272,9 +284,36 @@ namespace StageManager
 		}
 		private void SyncVisibilityByUpdatedTimeStamp()
 		{
-			var scenes = Scenes.OrderByDescending(s => s.Updated).ToArray();
-			for (int i = 0; i < scenes.Length; i++)
-				scenes[i].IsVisible = i < _visibleSceneCapacity;
+			var regularScenes = Scenes.Where(s => !s.IsOverflowGroup).ToArray();
+			foreach (var scene in regularScenes)
+				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle));
+
+			var currentDesktopScenes = regularScenes
+				.Where(s => s.DisplayWindows.Any())
+				.OrderByDescending(s => s.Updated)
+				.ToArray();
+
+			foreach (var scene in regularScenes.Except(currentDesktopScenes))
+				scene.IsVisible = false;
+
+			if (currentDesktopScenes.Length <= _visibleSceneCapacity)
+			{
+				foreach (var scene in currentDesktopScenes)
+					scene.IsVisible = true;
+
+				SyncOverflowGroups(Array.Empty<IReadOnlyList<SceneModel>>());
+				return;
+			}
+
+			var overflowGroupCount = CalculateOverflowGroupCount(currentDesktopScenes.Length, _visibleSceneCapacity);
+			var visibleSceneCount = Math.Max(0, _visibleSceneCapacity - overflowGroupCount);
+
+			for (int i = 0; i < currentDesktopScenes.Length; i++)
+				currentDesktopScenes[i].IsVisible = i < visibleSceneCount;
+
+			var hiddenScenes = currentDesktopScenes.Skip(visibleSceneCount).ToArray();
+			var overflowGroups = BuildOverflowGroups(hiddenScenes, overflowGroupCount);
+			SyncOverflowGroups(overflowGroups);
 		}
 
 		private void UpdateVisibleSceneCapacity()
@@ -289,6 +328,108 @@ namespace StageManager
 
 			_visibleSceneCapacity = capacity;
 			SyncVisibilityByUpdatedTimeStamp();
+		}
+
+		private bool IsWindowOnCurrentDesktop(IntPtr handle)
+		{
+			try
+			{
+				return _virtualDesktopManager.IsWindowOnCurrentDesktop(handle);
+			}
+			catch (COMException)
+			{
+				return true;
+			}
+			catch (InvalidCastException)
+			{
+				return true;
+			}
+		}
+
+		private int CalculateOverflowGroupCount(int sceneCount, int capacity)
+		{
+			if (sceneCount <= capacity)
+				return 0;
+
+			var maxGroupCount = Math.Max(1, Math.Min(MAX_OVERFLOW_GROUPS, capacity));
+			for (int groupCount = 1; groupCount <= maxGroupCount; groupCount++)
+			{
+				var visibleSceneCount = Math.Max(0, capacity - groupCount);
+				var hiddenSceneCount = sceneCount - visibleSceneCount;
+				if (hiddenSceneCount <= groupCount * OVERFLOW_TARGET_GROUP_SIZE)
+					return groupCount;
+			}
+
+			return maxGroupCount;
+		}
+
+		private IReadOnlyList<IReadOnlyList<SceneModel>> BuildOverflowGroups(IReadOnlyList<SceneModel> hiddenScenes, int groupCount)
+		{
+			if (!hiddenScenes.Any() || groupCount <= 0)
+				return Array.Empty<IReadOnlyList<SceneModel>>();
+
+			groupCount = Math.Min(groupCount, hiddenScenes.Count);
+			var orderedScenes = hiddenScenes
+				.OrderBy(GetSceneGroupName, StringComparer.CurrentCultureIgnoreCase)
+				.ThenByDescending(s => s.Updated)
+				.ToArray();
+
+			var groups = new List<IReadOnlyList<SceneModel>>();
+			var baseSize = orderedScenes.Length / groupCount;
+			var extra = orderedScenes.Length % groupCount;
+			var offset = 0;
+
+			for (int i = 0; i < groupCount; i++)
+			{
+				var size = baseSize + (i < extra ? 1 : 0);
+				groups.Add(orderedScenes.Skip(offset).Take(size).ToArray());
+				offset += size;
+			}
+
+			return groups;
+		}
+
+		private void SyncOverflowGroups(IReadOnlyList<IReadOnlyList<SceneModel>> groupedScenes)
+		{
+			while (_overflowScenes.Count < groupedScenes.Count)
+				_overflowScenes.Add(SceneModel.CreateOverflowGroup());
+
+			for (int i = 0; i < groupedScenes.Count; i++)
+			{
+				var overflowScene = _overflowScenes[i];
+				overflowScene.UpdateOverflowWindows(groupedScenes[i], GetOverflowGroupTitle(groupedScenes[i]));
+				overflowScene.IsVisible = true;
+
+				if (!Scenes.Contains(overflowScene))
+					Scenes.Add(overflowScene);
+			}
+
+			for (int i = groupedScenes.Count; i < _overflowScenes.Count; i++)
+			{
+				var overflowScene = _overflowScenes[i];
+				overflowScene.IsWindowPickerOpen = false;
+				overflowScene.IsVisible = false;
+				if (Scenes.Contains(overflowScene))
+					Scenes.Remove(overflowScene);
+			}
+		}
+
+		private string GetOverflowGroupTitle(IReadOnlyList<SceneModel> groupedScenes)
+		{
+			if (!groupedScenes.Any())
+				return "More windows";
+
+			var first = GetSceneGroupName(groupedScenes.First());
+			var last = GetSceneGroupName(groupedScenes.Last());
+			return string.Equals(first, last, StringComparison.CurrentCultureIgnoreCase)
+				? $"More: {first}"
+				: $"More: {first} - {last}";
+		}
+
+		private string GetSceneGroupName(SceneModel scene)
+		{
+			var window = scene.DisplayWindows.FirstOrDefault() ?? scene.Windows.FirstOrDefault();
+			return window?.Window?.ProcessName ?? scene.Title ?? "";
 		}
 
 		public ObservableCollection<SceneModel> Scenes { get; } = new ObservableCollection<SceneModel>();
@@ -411,6 +552,7 @@ namespace StageManager
 				return;
 
 			EnsureStageManagerOnCurrentDesktop();
+			Dispatcher.Invoke(SyncVisibilityByUpdatedTimeStamp);
 
 			var currentWindows = SceneManager.GetCurrentWindows().ToArray(); // in case the enumeration changes
 			UpdateModeByWindows(currentWindows);

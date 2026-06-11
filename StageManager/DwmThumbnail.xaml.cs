@@ -16,9 +16,13 @@ namespace StageManager
 		{
 			InitializeComponent();
 			LayoutUpdated += DwmThumbnail_LayoutUpdated;
+			Loaded += DwmThumbnail_Loaded;
+			Unloaded += DwmThumbnail_Unloaded;
 		}
 
 		private IntPtr _dwmThumbnail;
+		private IntPtr _registeredPreviewHandle;
+		private IntPtr _registeredHostHandle;
 		private Window _window;
 		private Point? _dpiScaleFactor;
 
@@ -56,21 +60,31 @@ namespace StageManager
 
 			if (nameof(PreviewHandle).Equals(e.Property.Name))
 			{
-				if ((IntPtr)e.OldValue == IntPtr.Zero && (IntPtr)e.NewValue != IntPtr.Zero)
-					StartCapture();
-
+				ReleaseCapture();
+				StartCapture();
 				UpdateThumbnailProperties();
 			}
 
-			if (nameof(IsVisible).Equals(e.Property.Name) && !(bool)e.NewValue && _dwmThumbnail != IntPtr.Zero)
+			if (nameof(IsVisible).Equals(e.Property.Name) && !(bool)e.NewValue)
 			{
-				NativeMethods.DwmUnregisterThumbnail(_dwmThumbnail);
-				_dwmThumbnail = IntPtr.Zero;
+				ReleaseCapture();
 			}
+		}
+
+		private void DwmThumbnail_Loaded(object sender, RoutedEventArgs e)
+		{
+			StartCapture();
+			UpdateThumbnailProperties();
+		}
+
+		private void DwmThumbnail_Unloaded(object sender, RoutedEventArgs e)
+		{
+			ReleaseCapture();
 		}
 
 		private void DwmThumbnail_LayoutUpdated(object? sender, EventArgs e)
 		{
+			StartCapture();
 			UpdateThumbnailProperties();
 		}
 
@@ -82,13 +96,34 @@ namespace StageManager
 
 		private void StartCapture()
 		{
+			if (PreviewHandle == IntPtr.Zero)
+				return;
+
 			var windowHandle = (PresentationSource.FromVisual(this) as HwndSource)?.Handle ?? IntPtr.Zero;
 			if (windowHandle == IntPtr.Zero)
 				return;
 
+			if (_dwmThumbnail != IntPtr.Zero && _registeredHostHandle == windowHandle && _registeredPreviewHandle == PreviewHandle)
+				return;
+
+			ReleaseCapture();
+
 			var hr = NativeMethods.DwmRegisterThumbnail(windowHandle, PreviewHandle, out _dwmThumbnail);
 			if (hr != 0)
 				return;
+
+			_registeredHostHandle = windowHandle;
+			_registeredPreviewHandle = PreviewHandle;
+		}
+
+		private void ReleaseCapture()
+		{
+			if (_dwmThumbnail != IntPtr.Zero)
+				NativeMethods.DwmUnregisterThumbnail(_dwmThumbnail);
+
+			_dwmThumbnail = IntPtr.Zero;
+			_registeredHostHandle = IntPtr.Zero;
+			_registeredPreviewHandle = IntPtr.Zero;
 		}
 
 		private Window FindWindow() => _window ??= Window.GetWindow(this);

@@ -31,6 +31,14 @@ namespace StageManager.Native
 			_manager.MoveWindowToDesktop(windowHandle, ref currentDesktopId);
 		}
 
+		public bool IsWindowOnCurrentDesktop(IntPtr windowHandle)
+		{
+			if (windowHandle == IntPtr.Zero)
+				return false;
+
+			return _manager.IsWindowOnCurrentVirtualDesktop(windowHandle, out var isOnCurrentDesktop) == 0 && isOnCurrentDesktop;
+		}
+
 		[ComImport]
 		[Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
 		private class CVirtualDesktopManager

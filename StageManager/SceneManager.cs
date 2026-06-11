@@ -6,6 +6,7 @@ using StageManager.Strategies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace StageManager
@@ -18,6 +19,7 @@ namespace StageManager
 		private bool _suspend = false;
 		private bool _enabled = true;
 		private Guid? _reentrancyLockSceneId;
+		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 
 		public event EventHandler<SceneChangedEventArgs> SceneChanged;
 		public event EventHandler<CurrentSceneSelectionChangedEventArgs> CurrentSceneSelectionChanged;
@@ -142,11 +144,14 @@ namespace StageManager
 
 		public Scene FindSceneForWindow(IntPtr handle) => _scenes?.FirstOrDefault(s => s.Windows.Any(w => w.Handle == handle));
 
-		private Scene FindSceneForProcess(string processName) => _scenes.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase));
+		private Scene FindSceneForProcess(string processName) => _scenes.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase) && s.Windows.Any(IsWindowOnCurrentDesktop));
 
 		private async void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
 		{
 			if (!_enabled)
+				return;
+
+			if (!IsSceneableWindow(window))
 				return;
 
 			SwitchToSceneByNewWindow(window).SafeFireAndForget();
@@ -228,7 +233,8 @@ namespace StageManager
 			{
 				_suspend = true;
 
-				var otherWindows = GetSceneableWindows().Except(scene?.Windows ?? Array.Empty<IWindow>()).ToArray();
+				var sceneWindows = scene?.Windows.Where(IsWindowOnCurrentDesktop).ToArray() ?? Array.Empty<IWindow>();
+				var otherWindows = GetSceneableWindows().Except(sceneWindows).ToArray();
 
 				var prior = _current;
 				_current = scene;
@@ -238,7 +244,7 @@ namespace StageManager
 
 				if (scene is object)
 				{
-					foreach (var w in scene.Windows)
+					foreach (var w in sceneWindows)
 						WindowStrategy.Show(w);
 				}
 
@@ -323,7 +329,31 @@ namespace StageManager
 				await MoveWindow(sourceScene, window, _current).ConfigureAwait(false);
 		}
 
-		private IEnumerable<IWindow> GetSceneableWindows() => WindowsManager?.Windows?.Where(w => !string.IsNullOrEmpty(w.ProcessFileName) && !string.IsNullOrEmpty(w.Title));
+		private bool IsSceneableWindow(IWindow window)
+		{
+			return window is object
+				&& !string.IsNullOrEmpty(window.ProcessFileName)
+				&& !string.IsNullOrEmpty(window.Title)
+				&& IsWindowOnCurrentDesktop(window);
+		}
+
+		private bool IsWindowOnCurrentDesktop(IWindow window)
+		{
+			try
+			{
+				return _virtualDesktopManager.IsWindowOnCurrentDesktop(window.Handle);
+			}
+			catch (COMException)
+			{
+				return true;
+			}
+			catch (InvalidCastException)
+			{
+				return true;
+			}
+		}
+
+		private IEnumerable<IWindow> GetSceneableWindows() => WindowsManager?.Windows?.Where(IsSceneableWindow);
 
 		public IEnumerable<Scene> GetScenes()
 		{
@@ -338,7 +368,7 @@ namespace StageManager
 			return _scenes;
 		}
 
-		public IEnumerable<IWindow> GetCurrentWindows() => _current?.Windows ?? GetSceneableWindows();
+		public IEnumerable<IWindow> GetCurrentWindows() => _current?.Windows.Where(IsWindowOnCurrentDesktop) ?? GetSceneableWindows();
 
 		private string GetWindowGroupKey(IWindow window) => window.ProcessName;
 	}
