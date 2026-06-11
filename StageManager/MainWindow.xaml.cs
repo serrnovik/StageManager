@@ -9,8 +9,10 @@ using StageManager.Native.Window;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -23,7 +25,7 @@ namespace StageManager
 	/// <summary>
 	/// Interaction logic for MainWindow.xaml
 	/// </summary>
-	public partial class MainWindow : Window
+	public partial class MainWindow : Window, INotifyPropertyChanged
 	{
 		private const int TIMERINTERVAL_MILLISECONDS = 500;
 		private const int MAX_SCENES = 6;
@@ -36,6 +38,8 @@ namespace StageManager
 		private Point _mouse = new Point(0, 0);
 		private SceneModel _removedCurrentScene;
 		private SceneModel _mouseDownScene;
+		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
+		private bool _isStageManagerEnabled;
 
 		public bool EnableWindowDropToScene = false;
 		public bool EnableWindowPullToScene = true;
@@ -46,7 +50,7 @@ namespace StageManager
 
 			DataContext = this;
 
-			_overlapCheckTimer = new Timer(OverlapCheck, null, 2500, TIMERINTERVAL_MILLISECONDS);
+			_overlapCheckTimer = new Timer(OverlapCheck, null, Timeout.Infinite, Timeout.Infinite);
 
 			SwitchSceneCommand = new ActionCommand(async model => await SceneManager!.SwitchTo(((SceneModel)model).Scene));
 		}
@@ -57,17 +61,16 @@ namespace StageManager
 
 			_thisHandle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
 			_lastWidth = Width;
-
-			StartHook();	
 		}
 
 		protected override void OnClosed(EventArgs e)
 		{
 			StopHook();
+			_overlapCheckTimer.Dispose();
 
 			trayIcon.Dispose();
 
-			SceneManager.Stop();
+			SceneManager?.Stop();
 
 			base.OnClosed(e);
 
@@ -93,6 +96,13 @@ namespace StageManager
 			var foregroundScene = SceneManager.FindSceneForWindow(foreground);
 			if (foregroundScene is object)
 				await SceneManager.SwitchTo(foregroundScene).ConfigureAwait(true);
+
+			_isStageManagerEnabled = true;
+			OnPropertyChanged(nameof(IsStageManagerEnabled));
+			OnPropertyChanged(nameof(StageManagerStatus));
+			StartHook();
+			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+			EnsureStageManagerOnCurrentDesktop();
 		}
 
 		private void AddInitialScenes()
@@ -264,6 +274,25 @@ namespace StageManager
 
 		public IntPtr Handle => _thisHandle;
 
+		public event PropertyChangedEventHandler? PropertyChanged;
+
+		public bool IsStageManagerEnabled
+		{
+			get => _isStageManagerEnabled;
+			set
+			{
+				if (value == _isStageManagerEnabled)
+					return;
+
+				_isStageManagerEnabled = value;
+				OnPropertyChanged(nameof(IsStageManagerEnabled));
+				OnPropertyChanged(nameof(StageManagerStatus));
+				ApplyStageManagerEnabled(value).SafeFireAndForget();
+			}
+		}
+
+		public string StageManagerStatus => IsStageManagerEnabled ? "Stage Manager: On" : "Stage Manager: Off";
+
 		public WindowMode Mode
 		{
 			get => _mode;
@@ -300,6 +329,9 @@ namespace StageManager
 
 		private void StartHook()
 		{
+			if (!IsStageManagerEnabled || _hook is object)
+				return;
+
 			_hook = new TaskPoolGlobalHook();
 
 			_hook.MousePressed += OnMousePressed;
@@ -311,6 +343,9 @@ namespace StageManager
 
 		private void StopHook()
 		{
+			if (_hook is null)
+				return;
+
 			_hook.MousePressed -= OnMousePressed;
 			_hook.MouseReleased -= OnMouseReleased;
 			_hook.MouseMoved -= _hook_MouseMoved;
@@ -321,6 +356,10 @@ namespace StageManager
 			}
 			catch (HookException)
 			{
+			}
+			finally
+			{
+				_hook = null;
 			}
 		}
 
@@ -337,6 +376,11 @@ namespace StageManager
 
 		private void OverlapCheck(object? _)
 		{
+			if (!IsStageManagerEnabled || SceneManager is null)
+				return;
+
+			EnsureStageManagerOnCurrentDesktop();
+
 			var currentWindows = SceneManager.GetCurrentWindows().ToArray(); // in case the enumeration changes
 			UpdateModeByWindows(currentWindows);
 		}
@@ -385,6 +429,42 @@ namespace StageManager
 			Close();
 		}
 
+		private async Task ApplyStageManagerEnabled(bool enabled)
+		{
+			if (SceneManager is null)
+				return;
+
+			if (enabled)
+			{
+				Show();
+				EnsureStageManagerOnCurrentDesktop();
+				await SceneManager.Enable().ConfigureAwait(true);
+				StartHook();
+				_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+			}
+			else
+			{
+				_overlapCheckTimer.Change(Timeout.Infinite, Timeout.Infinite);
+				StopHook();
+				SceneManager.Disable();
+				Hide();
+			}
+		}
+
+		private void EnsureStageManagerOnCurrentDesktop()
+		{
+			try
+			{
+				_virtualDesktopManager.MoveWindowToCurrentDesktop(_thisHandle);
+			}
+			catch (COMException)
+			{
+			}
+			catch (InvalidCastException)
+			{
+			}
+		}
+
 		private void ContextMenu_Closed(object sender, RoutedEventArgs e)
 		{
 			StartHook();
@@ -393,6 +473,11 @@ namespace StageManager
 		private void ContextMenu_Opened(object sender, RoutedEventArgs e)
 		{
 			StopHook();
+		}
+
+		private void OnPropertyChanged(string propertyName)
+		{
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
 	}
 

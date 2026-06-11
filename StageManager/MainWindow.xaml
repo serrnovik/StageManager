@@ -117,13 +117,18 @@
         <tb:TaskbarIcon
             x:Name="trayIcon"
             Visibility="Visible"
-            ToolTipText="Stage Manager"
+            ToolTipText="{Binding StageManagerStatus}"
             IconSource="StageManager.ico"
             MenuActivation="LeftOrRightClick">
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu
                     Opened="ContextMenu_Opened"
                     Closed="ContextMenu_Closed">
+                    <MenuItem
+                        Header="Stage Manager on"
+                        IsCheckable="True"
+                        IsChecked="{Binding IsStageManagerEnabled, Mode=TwoWay}" />
+                    <Separator />
                     <MenuItem
                         Header="Start with Windows"
                         IsCheckable="True"

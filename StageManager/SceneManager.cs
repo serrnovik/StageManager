@@ -17,6 +17,7 @@ namespace StageManager
 		private List<Scene> _scenes;
 		private Scene _current;
 		private bool _suspend = false;
+		private bool _enabled = true;
 		private Guid? _reentrancyLockSceneId;
 
 		public event EventHandler<SceneChangedEventArgs> SceneChanged;
@@ -25,6 +26,8 @@ namespace StageManager
 		private IWindowStrategy WindowStrategy { get; } = new NormalizeAndMinimizeWindowStrategy(); // new WindowNormalizeStrategy/OpacityWindowStrategy/ShowAndHideWindowStrategy
 
 		public WindowsManager WindowsManager { get; }
+
+		public bool IsEnabled => _enabled;
 
 		public SceneManager(WindowsManager windowsManager)
 		{
@@ -48,20 +51,53 @@ namespace StageManager
 
 		internal void Stop()
 		{
+			_enabled = false;
 			WindowsManager.Stop();
+			ShowAllWindows();
+			_desktop.ShowIcons();
+		}
+
+		public void Disable()
+		{
+			if (!_enabled)
+				return;
+
+			_enabled = false;
+			_suspend = true;
+			ShowAllWindows();
+			_desktop.ShowIcons();
+		}
+
+		public async Task Enable()
+		{
+			if (_enabled)
+				return;
+
+			_enabled = true;
+			_suspend = false;
+			_desktop.HideIcons();
+
+			var foregroundScene = FindSceneForWindow(Win32.GetForegroundWindow());
+			var scene = foregroundScene ?? _current;
+			_current = null;
+			await SwitchTo(scene).ConfigureAwait(true);
+		}
+
+		private void ShowAllWindows()
+		{
+			if (_scenes is null)
+				return;
 
 			foreach (var scene in _scenes)
 			{
 				foreach (var w in scene.Windows)
 					WindowStrategy.Show(w);
 			}
-
-			_desktop.ShowIcons();
 		}
 
 		private void WindowsManager_WindowUpdated(IWindow window, WindowUpdateType type)
 		{
-			if (_suspend)
+			if (_suspend || !_enabled)
 				return;
 
 			if (type == WindowUpdateType.Foreground)
@@ -70,7 +106,7 @@ namespace StageManager
 
 		private void WindowsManager_UntrackedFocus(object? sender, IntPtr e)
 		{
-			if (_suspend)
+			if (_suspend || !_enabled)
 				return;
 
 			if (!_desktop.HasDesktopView)
@@ -82,6 +118,9 @@ namespace StageManager
 
 		private void WindowsManager_WindowDestroyed(IWindow window)
 		{
+			if (!_enabled)
+				return;
+
 			var scene = FindSceneForWindow(window);
 
 			if (scene is not null)
@@ -108,6 +147,9 @@ namespace StageManager
 
 		private async void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
 		{
+			if (!_enabled)
+				return;
+
 			SwitchToSceneByNewWindow(window).SafeFireAndForget();
 		}
 
@@ -174,6 +216,9 @@ namespace StageManager
 
 		public async Task SwitchTo(Scene? scene)
 		{
+			if (!_enabled)
+				return;
+
 			if (object.Equals(scene, _current))
 				return;
 
