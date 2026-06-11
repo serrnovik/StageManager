@@ -74,6 +74,7 @@ namespace StageManager
 				sceneModel.PrimaryDisplayWindow?.Focus();
 			});
 			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
+			ActivateAppIconCommand = new ActionCommand(async model => await ActivateAppIcon((WindowModel)model));
 			ActivateWindowCommand = new ActionCommand(async model => await ActivateWindow((WindowModel)model));
 		}
 
@@ -453,6 +454,8 @@ namespace StageManager
 
 		public ICommand ToggleSceneWindowPickerCommand { get; }
 
+		public ICommand ActivateAppIconCommand { get; }
+
 		public ICommand ActivateWindowCommand { get; }
 
 		public SceneManager? SceneManager { get; private set; }
@@ -689,6 +692,28 @@ namespace StageManager
 				await SceneManager.SwitchTo(scene).ConfigureAwait(true);
 
 			window.Focus();
+		}
+
+		private async Task ActivateAppIcon(WindowModel window)
+		{
+			if (window is null)
+				return;
+
+			var scene = AllScenes
+				.Where(s => s.DisplayWindows.Any(w => w.Handle == window.Handle))
+				.OrderByDescending(s => s.IsVisible)
+				.FirstOrDefault();
+
+			var sameAppWindowCount = scene?.DisplayWindows
+				.Count(w => string.Equals(w.Window?.ProcessName, window.Window?.ProcessName, StringComparison.OrdinalIgnoreCase)) ?? 1;
+
+			if (scene is object && sameAppWindowCount > 1)
+			{
+				ToggleSceneWindowPicker(scene);
+				return;
+			}
+
+			await ActivateWindow(window).ConfigureAwait(true);
 		}
 
 		private void CloseWindowPickers()

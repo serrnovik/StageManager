@@ -93,8 +93,16 @@
                                 <ContentControl.ContentTemplate>
                                     <DataTemplate>
                                         <Grid
+                                            x:Name="previewCard"
                                             Width="220"
-                                            Height="124">
+                                            Height="124"
+                                            RenderTransformOrigin="0.5,0.58">
+                                            <Grid.RenderTransform>
+                                                <ScaleTransform
+                                                    x:Name="previewScale"
+                                                    ScaleX="1"
+                                                    ScaleY="1" />
+                                            </Grid.RenderTransform>
                                             <local:DwmThumbnail
                                                 x:Name="livePreview"
                                                 PreviewHandle="{Binding Handle}"
@@ -117,6 +125,40 @@
                                             </Border>
                                         </Grid>
                                         <DataTemplate.Triggers>
+                                            <EventTrigger
+                                                RoutedEvent="MouseEnter">
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation
+                                                            Storyboard.TargetName="previewScale"
+                                                            Storyboard.TargetProperty="ScaleX"
+                                                            To="1.035"
+                                                            Duration="0:0:0.14" />
+                                                        <DoubleAnimation
+                                                            Storyboard.TargetName="previewScale"
+                                                            Storyboard.TargetProperty="ScaleY"
+                                                            To="1.035"
+                                                            Duration="0:0:0.14" />
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                            <EventTrigger
+                                                RoutedEvent="MouseLeave">
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation
+                                                            Storyboard.TargetName="previewScale"
+                                                            Storyboard.TargetProperty="ScaleX"
+                                                            To="1"
+                                                            Duration="0:0:0.16" />
+                                                        <DoubleAnimation
+                                                            Storyboard.TargetName="previewScale"
+                                                            Storyboard.TargetProperty="ScaleY"
+                                                            To="1"
+                                                            Duration="0:0:0.16" />
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
                                             <DataTrigger
                                                 Binding="{Binding IsMinimized}"
                                                 Value="True">
@@ -167,11 +209,66 @@
                                                         BlurRadius="10"
                                                         Opacity="0.4" />
                                                 </Border.Effect>
-                                                <Image
-                                                    Width="24"
-                                                    Height="24"
-                                                    Source="{Binding Icon}" />
+                                                <Button
+                                                    Width="28"
+                                                    Height="28"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderBrush="Transparent"
+                                                    Command="{Binding ActivateAppIconCommand, Mode=OneTime, Source={x:Reference thisWindow}}"
+                                                    CommandParameter="{Binding .}">
+                                                    <Image
+                                                        x:Name="overflowIconImage"
+                                                        Width="24"
+                                                        Height="24"
+                                                        RenderTransformOrigin="0.5,0.5"
+                                                        Source="{Binding Icon}"
+                                                        Stretch="Uniform">
+                                                        <Image.RenderTransform>
+                                                            <ScaleTransform
+                                                                x:Name="overflowIconScale"
+                                                                ScaleX="1"
+                                                                ScaleY="1" />
+                                                        </Image.RenderTransform>
+                                                    </Image>
+                                                </Button>
                                             </Border>
+                                            <DataTemplate.Triggers>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseEnter">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="overflowIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1.14"
+                                                                Duration="0:0:0.12" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="overflowIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1.14"
+                                                                Duration="0:0:0.12" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseLeave">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="overflowIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="overflowIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </DataTemplate.Triggers>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -200,44 +297,101 @@
                                                     <DropShadowEffect
                                                         BlurRadius="20" />
                                                 </Border.Effect>
-                                                <Image
-                                                    Margin="0, 0, 0, 0"
-                                                    Width="30"
-                                                    Height="30"
-                                                    Stretch="Uniform"
-                                                    Source="{Binding Icon}" />
+                                                <Button
+                                                    Width="34"
+                                                    Height="34"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderBrush="Transparent"
+                                                    Command="{Binding ActivateAppIconCommand, Mode=OneTime, Source={x:Reference thisWindow}}"
+                                                    CommandParameter="{Binding .}">
+                                                    <Image
+                                                        x:Name="stageIconImage"
+                                                        Margin="0, 0, 0, 0"
+                                                        Width="30"
+                                                        Height="30"
+                                                        RenderTransformOrigin="0.5,0.5"
+                                                        Stretch="Uniform"
+                                                        Source="{Binding Icon}">
+                                                        <Image.RenderTransform>
+                                                            <ScaleTransform
+                                                                x:Name="stageIconScale"
+                                                                ScaleX="1"
+                                                                ScaleY="1" />
+                                                        </Image.RenderTransform>
+                                                    </Image>
+                                                </Button>
                                             </Border>
+                                            <DataTemplate.Triggers>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseEnter">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="stageIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                            To="1.1"
+                                                                Duration="0:0:0.12" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="stageIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                            To="1.1"
+                                                                Duration="0:0:0.12" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseLeave">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="stageIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="stageIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </DataTemplate.Triggers>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <Button
-                                    Width="22"
-                                    Height="22"
+                                    Width="26"
+                                    Height="24"
                                     Margin="6,0,0,0"
                                     Padding="0"
                                     VerticalAlignment="Center"
-                                    Background="#CCFFFFFF"
-                                    BorderBrush="#66FFFFFF"
+                                    Background="#DDF6F8FA"
+                                    BorderBrush="#99FFFFFF"
                                     Click="WindowPickerButton_Click"
                                     Visibility="{Binding HasMultipleWindows, Converter={StaticResource BoolToVisibility}}">
-                                    <Path
-                                        Data="M 5 14 L 11 8 L 17 14"
-                                        Stroke="#333333"
-                                        StrokeThickness="2.2"
-                                        StrokeStartLineCap="Round"
-                                        StrokeEndLineCap="Round" />
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontSize="18"
+                                        FontWeight="SemiBold"
+                                        Foreground="#333333"
+                                        LineHeight="18"
+                                        Text="+" />
                                 </Button>
                             </StackPanel>
                         </StackPanel>
                         <Popup
                             AllowsTransparency="False"
+                            HorizontalOffset="24"
                             IsOpen="{Binding IsWindowPickerOpen, Mode=TwoWay}"
                             Placement="Right"
                             PlacementTarget="{Binding ElementName=sceneRoot}"
                             StaysOpen="False">
                             <Border
                                 MaxWidth="540"
-                                Padding="12"
+                                Padding="16,14"
                                 Background="#F2FFFFFF"
                                 BorderBrush="#55FFFFFF"
                                 BorderThickness="1">
@@ -266,8 +420,16 @@
                                                 CommandParameter="{Binding .}">
                                                 <StackPanel>
                                                     <Grid
+                                                        x:Name="pickerPreviewCard"
                                                         Width="220"
-                                                        Height="132">
+                                                        Height="132"
+                                                        RenderTransformOrigin="0.5,0.58">
+                                                        <Grid.RenderTransform>
+                                                            <ScaleTransform
+                                                                x:Name="pickerPreviewScale"
+                                                                ScaleX="1"
+                                                                ScaleY="1" />
+                                                        </Grid.RenderTransform>
                                                         <local:DwmThumbnail
                                                             x:Name="pickerLivePreview"
                                                             Width="220"
@@ -292,10 +454,20 @@
                                                         Margin="0,6,0,0"
                                                         LastChildFill="True">
                                                         <Image
+                                                            x:Name="pickerLabelIcon"
                                                             Width="24"
                                                             Height="24"
                                                             Margin="0,0,6,0"
-                                                            Source="{Binding Icon}" />
+                                                            RenderTransformOrigin="0.5,0.5"
+                                                            Source="{Binding Icon}"
+                                                            Stretch="Uniform">
+                                                            <Image.RenderTransform>
+                                                                <ScaleTransform
+                                                                    x:Name="pickerLabelIconScale"
+                                                                    ScaleX="1"
+                                                                    ScaleY="1" />
+                                                            </Image.RenderTransform>
+                                                        </Image>
                                                         <TextBlock
                                                             VerticalAlignment="Center"
                                                             FontSize="12"
@@ -306,6 +478,60 @@
                                                 </StackPanel>
                                             </Button>
                                             <DataTemplate.Triggers>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseEnter">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerPreviewScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1.025"
+                                                                Duration="0:0:0.14" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerPreviewScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1.025"
+                                                                Duration="0:0:0.14" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerLabelIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1.12"
+                                                                Duration="0:0:0.12" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerLabelIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1.12"
+                                                                Duration="0:0:0.12" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                                <EventTrigger
+                                                    RoutedEvent="MouseLeave">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerPreviewScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1"
+                                                                Duration="0:0:0.16" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerPreviewScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1"
+                                                                Duration="0:0:0.16" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerLabelIconScale"
+                                                                Storyboard.TargetProperty="ScaleX"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="pickerLabelIconScale"
+                                                                Storyboard.TargetProperty="ScaleY"
+                                                                To="1"
+                                                                Duration="0:0:0.14" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
                                                 <DataTrigger
                                                     Binding="{Binding IsMinimized}"
                                                     Value="True">

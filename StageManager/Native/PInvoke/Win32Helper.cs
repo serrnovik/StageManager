@@ -30,27 +30,15 @@ namespace StageManager.Native.PInvoke
         public static bool IsAltTabWindow(IntPtr hWnd)
         {
             var exStyle = Win32.GetWindowExStyleLongPtr(hWnd);
-            if (exStyle.HasFlag(Win32.WS_EX.WS_EX_TOOLWINDOW) ||
-                Win32.GetWindow(hWnd, Win32.GW.GW_OWNER) != IntPtr.Zero)
-            {
+            if (exStyle.HasFlag(Win32.WS_EX.WS_EX_TOOLWINDOW))
                 return false;
-            }
-            if (exStyle.HasFlag(Win32.WS_EX.WS_EX_APPWINDOW))
-            {
-                return true;
-            }
 
-            return true;
-            // I am leaving this code here for testing purposes, but I don't think I need it.
-            // the old-school alt-tab implementation clearly doesn't 100% line up with the aforementioned
-            // blog post, or the below implementation in C# is wrong, because some windows are hidden when 
-            // popups are created. For my purposes, I want to layout them anyway, so always return true;
-            /*
-            // Start at the root owner
+            if (exStyle.HasFlag(Win32.WS_EX.WS_EX_APPWINDOW))
+                return true;
+
             var hWndTry = Win32.GetAncestor(hWnd, Win32.GA.GA_ROOTOWNER);
             IntPtr oldHWnd;
 
-            // See if we are the last active visible popup
             do
             {
                 oldHWnd = hWndTry;
@@ -59,7 +47,6 @@ namespace StageManager.Native.PInvoke
             while (oldHWnd != hWndTry && !Win32.IsWindowVisible(hWndTry));
 
             return hWndTry == hWnd;
-            */
         }
 
         public static void ForceForegroundWindow(IntPtr hWnd)

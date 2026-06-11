@@ -172,8 +172,18 @@ namespace StageManager.Native
 				return _didManualHide ||
 					(!Win32Helper.IsCloaked(_handle) /* https://devblogs.microsoft.com/oldnewthing/20200302-00/?p=103507 */ &&
 					   Win32Helper.IsAppWindow(_handle) &&
-					   Win32Helper.IsAltTabWindow(_handle));
+					   Win32Helper.IsAltTabWindow(_handle) &&
+					   HasUsableWindowSize());
 			}
+		}
+
+		private bool HasUsableWindowSize()
+		{
+			if (IsMinimized)
+				return true;
+
+			var location = Location;
+			return location.Width >= 320 && location.Height >= 180;
 		}
 
 		public bool IsCandidate()
