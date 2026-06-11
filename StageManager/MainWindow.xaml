@@ -70,25 +70,36 @@
                                 </i:EventTrigger>
                             </i:Interaction.Triggers>
                             <!-- Windows -->
-                            <ItemsControl
+                            <ContentControl
                                 x:Name="previewItems"
-                                ItemsSource="{Binding DisplayWindows}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Grid
-                                            Margin="0,0,0,0"></Grid>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
+                                Content="{Binding PrimaryDisplayWindow}">
+                                <ContentControl.Style>
+                                    <Style
+                                        TargetType="{x:Type ContentControl}">
+                                        <Setter
+                                            Property="Visibility"
+                                            Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger
+                                                Binding="{Binding HasDisplayWindows}"
+                                                Value="False">
+                                                <Setter
+                                                    Property="Visibility"
+                                                    Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ContentControl.Style>
+                                <ContentControl.ContentTemplate>
                                     <DataTemplate>
                                         <local:DwmThumbnail
                                             PreviewHandle="{Binding Handle}"
-                                            MinHeight="100"
-                                            MinWidth="150"
+                                            Width="220"
+                                            Height="124"
                                             Margin="0, 0, 0, 0" />
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
                             <Border
                                 x:Name="overflowPreview"
                                 Width="220"

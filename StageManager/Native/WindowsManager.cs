@@ -65,7 +65,7 @@ namespace StageManager.Native
 		/// </summary>
 		public event WindowDelegate ExternalWindowClosed;
 
-		public IEnumerable<IWindow> Windows => _windows.Values;
+		public IEnumerable<IWindow> Windows => _windows.Values.ToArray();
 
 		public WindowsManager()
 		{

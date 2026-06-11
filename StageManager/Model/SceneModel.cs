@@ -44,7 +44,8 @@ namespace StageManager.Model
 
 		public void UpdateDisplayWindows(Func<WindowModel, bool> predicate)
 		{
-			var displayWindows = Windows.Where(predicate).ToArray();
+			var windows = Windows.ToArray();
+			var displayWindows = windows.Where(predicate).ToArray();
 
 			for (int i = 0; i < displayWindows.Length; i++)
 			{
@@ -65,6 +66,8 @@ namespace StageManager.Model
 			}
 
 			RaisePropertyChanged(nameof(HasMultipleWindows));
+			RaisePropertyChanged(nameof(HasDisplayWindows));
+			RaisePropertyChanged(nameof(PrimaryDisplayWindow));
 		}
 
 		public void UpdateFromScene(Scene updatedScene)
@@ -155,6 +158,10 @@ namespace StageManager.Model
 		public string Title => IsOverflowGroup ? _overflowTitle : Scene?.Title ?? "";
 
 		public bool HasMultipleWindows => IsOverflowGroup || DisplayWindows.Count > 1;
+
+		public bool HasDisplayWindows => DisplayWindows.Count > 0;
+
+		public WindowModel? PrimaryDisplayWindow => DisplayWindows.FirstOrDefault();
 
 		public bool IsOverflowGroup => _isOverflowGroup;
 

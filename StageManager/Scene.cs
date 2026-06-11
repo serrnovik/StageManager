@@ -15,7 +15,7 @@ namespace StageManager
 
 		public string Title { get; private set; }
 
-		public IEnumerable<IWindow> Windows => _windows;
+		public IEnumerable<IWindow> Windows => _windows.ToArray();
 
 		private List<IWindow> _windows = new List<IWindow>();
 		private bool _selected;

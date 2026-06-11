@@ -7,6 +7,7 @@ namespace StageManager.Native
 	internal sealed class VirtualDesktopManager
 	{
 		private readonly IVirtualDesktopManager _manager;
+		private Guid? _lastKnownCurrentDesktopId;
 
 		public VirtualDesktopManager()
 		{
@@ -22,21 +23,53 @@ namespace StageManager.Native
 			if (foregroundHandle == IntPtr.Zero || foregroundHandle == windowHandle)
 				return;
 
-			if (_manager.IsWindowOnCurrentVirtualDesktop(windowHandle, out var isOnCurrentDesktop) == 0 && isOnCurrentDesktop)
+			var currentDesktopId = GetCurrentDesktopId(windowHandle);
+			if (currentDesktopId is null)
 				return;
 
-			if (_manager.GetWindowDesktopId(foregroundHandle, out var currentDesktopId) != 0)
+			if (TryGetWindowDesktopId(windowHandle, out var windowDesktopId) && windowDesktopId == currentDesktopId.Value)
 				return;
 
-			_manager.MoveWindowToDesktop(windowHandle, ref currentDesktopId);
+			var targetDesktopId = currentDesktopId.Value;
+			_manager.MoveWindowToDesktop(windowHandle, ref targetDesktopId);
+		}
+
+		public Guid? GetCurrentDesktopId(IntPtr excludedWindowHandle = default)
+		{
+			var foregroundHandle = Win32.GetForegroundWindow();
+			if (foregroundHandle != IntPtr.Zero
+				&& foregroundHandle != excludedWindowHandle
+				&& TryGetWindowDesktopId(foregroundHandle, out var currentDesktopId))
+			{
+				_lastKnownCurrentDesktopId = currentDesktopId;
+			}
+
+			return _lastKnownCurrentDesktopId;
 		}
 
 		public bool IsWindowOnCurrentDesktop(IntPtr windowHandle)
 		{
+			return IsWindowOnDesktop(windowHandle, GetCurrentDesktopId());
+		}
+
+		public bool IsWindowOnDesktop(IntPtr windowHandle, Guid? desktopId)
+		{
 			if (windowHandle == IntPtr.Zero)
 				return false;
 
+			if (Win32Helper.IsCloaked(windowHandle))
+				return false;
+
+			if (desktopId is object && TryGetWindowDesktopId(windowHandle, out var windowDesktopId))
+				return windowDesktopId == desktopId.Value;
+
 			return _manager.IsWindowOnCurrentVirtualDesktop(windowHandle, out var isOnCurrentDesktop) == 0 && isOnCurrentDesktop;
+		}
+
+		private bool TryGetWindowDesktopId(IntPtr windowHandle, out Guid desktopId)
+		{
+			desktopId = default;
+			return windowHandle != IntPtr.Zero && _manager.GetWindowDesktopId(windowHandle, out desktopId) == 0;
 		}
 
 		[ComImport]

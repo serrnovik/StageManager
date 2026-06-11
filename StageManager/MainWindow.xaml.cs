@@ -33,7 +33,7 @@ namespace StageManager
 		private const int FALLBACK_VISIBLE_SCENES = 6;
 		private const int MAX_OVERFLOW_GROUPS = 4;
 		private const int OVERFLOW_TARGET_GROUP_SIZE = 3;
-		private const double SCENE_SLOT_HEIGHT = 158.0;
+		private const double SCENE_SLOT_HEIGHT = 184.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
 		private IntPtr _thisHandle;
@@ -142,23 +142,10 @@ namespace StageManager
 
 		private void SceneManager_CurrentSceneSelectionChanged(object? sender, CurrentSceneSelectionChangedEventArgs args)
 		{
-			var currentModel = args.Current is null ? null : Scenes.FirstOrDefault(m => m.Id == args.Current.Id);
+			if (_removedCurrentScene is object && !Scenes.Contains(_removedCurrentScene))
+				Scenes.Add(_removedCurrentScene);
 
-			if (currentModel is object)
-			{
-				var currentIndex = Scenes.IndexOf(currentModel);
-				Scenes.RemoveAt(currentIndex);
-
-				if (_removedCurrentScene is object)
-					Scenes.Insert(currentIndex, _removedCurrentScene);
-			}
-			else
-			{
-				if (_removedCurrentScene is object)
-					Scenes.Add(_removedCurrentScene);
-			}
-
-			_removedCurrentScene = currentModel;
+			_removedCurrentScene = null;
 
 			SyncVisibilityByUpdatedTimeStamp();
 		}
@@ -285,9 +272,10 @@ namespace StageManager
 		}
 		private void SyncVisibilityByUpdatedTimeStamp()
 		{
+			var currentDesktopId = GetCurrentDesktopId();
 			var regularScenes = Scenes.Where(s => !s.IsOverflowGroup).ToArray();
 			foreach (var scene in regularScenes)
-				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle));
+				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle, currentDesktopId));
 
 			var currentDesktopScenes = regularScenes
 				.Where(s => s.DisplayWindows.Any())
@@ -331,11 +319,27 @@ namespace StageManager
 			SyncVisibilityByUpdatedTimeStamp();
 		}
 
-		private bool IsWindowOnCurrentDesktop(IntPtr handle)
+		private Guid? GetCurrentDesktopId()
 		{
 			try
 			{
-				return _virtualDesktopManager.IsWindowOnCurrentDesktop(handle);
+				return _virtualDesktopManager.GetCurrentDesktopId(_thisHandle);
+			}
+			catch (COMException)
+			{
+				return null;
+			}
+			catch (InvalidCastException)
+			{
+				return null;
+			}
+		}
+
+		private bool IsWindowOnCurrentDesktop(IntPtr handle, Guid? currentDesktopId)
+		{
+			try
+			{
+				return _virtualDesktopManager.IsWindowOnDesktop(handle, currentDesktopId);
 			}
 			catch (COMException)
 			{
