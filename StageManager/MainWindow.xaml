@@ -92,11 +92,44 @@
                                 </ContentControl.Style>
                                 <ContentControl.ContentTemplate>
                                     <DataTemplate>
-                                        <local:DwmThumbnail
-                                            PreviewHandle="{Binding Handle}"
+                                        <Grid
                                             Width="220"
-                                            Height="124"
-                                            Margin="0, 0, 0, 0" />
+                                            Height="124">
+                                            <local:DwmThumbnail
+                                                x:Name="livePreview"
+                                                PreviewHandle="{Binding Handle}"
+                                                Width="220"
+                                                Height="124"
+                                                Margin="0, 0, 0, 0" />
+                                            <Border
+                                                x:Name="iconPreview"
+                                                Visibility="Collapsed"
+                                                Background="#E8FFFFFF"
+                                                BorderBrush="#AAFFFFFF"
+                                                BorderThickness="1">
+                                                <Image
+                                                    Width="44"
+                                                    Height="44"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    Source="{Binding Icon}"
+                                                    Stretch="Uniform" />
+                                            </Border>
+                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger
+                                                Binding="{Binding IsMinimized}"
+                                                Value="True">
+                                                <Setter
+                                                    TargetName="livePreview"
+                                                    Property="Visibility"
+                                                    Value="Collapsed" />
+                                                <Setter
+                                                    TargetName="iconPreview"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ContentControl.ContentTemplate>
                             </ContentControl>
@@ -169,7 +202,9 @@
                                                 </Border.Effect>
                                                 <Image
                                                     Margin="0, 0, 0, 0"
+                                                    Width="30"
                                                     Height="30"
+                                                    Stretch="Uniform"
                                                     Source="{Binding Icon}" />
                                             </Border>
                                         </DataTemplate>
@@ -230,10 +265,29 @@
                                                 Command="{Binding ActivateWindowCommand, Mode=OneTime, Source={x:Reference thisWindow}}"
                                                 CommandParameter="{Binding .}">
                                                 <StackPanel>
-                                                    <local:DwmThumbnail
+                                                    <Grid
                                                         Width="220"
-                                                        Height="132"
-                                                        PreviewHandle="{Binding Handle}" />
+                                                        Height="132">
+                                                        <local:DwmThumbnail
+                                                            x:Name="pickerLivePreview"
+                                                            Width="220"
+                                                            Height="132"
+                                                            PreviewHandle="{Binding Handle}" />
+                                                        <Border
+                                                            x:Name="pickerIconPreview"
+                                                            Visibility="Collapsed"
+                                                            Background="#E8FFFFFF"
+                                                            BorderBrush="#AAFFFFFF"
+                                                            BorderThickness="1">
+                                                            <Image
+                                                                Width="44"
+                                                                Height="44"
+                                                                HorizontalAlignment="Center"
+                                                                VerticalAlignment="Center"
+                                                                Source="{Binding Icon}"
+                                                                Stretch="Uniform" />
+                                                        </Border>
+                                                    </Grid>
                                                     <DockPanel
                                                         Margin="0,6,0,0"
                                                         LastChildFill="True">
@@ -251,6 +305,20 @@
                                                     </DockPanel>
                                                 </StackPanel>
                                             </Button>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger
+                                                    Binding="{Binding IsMinimized}"
+                                                    Value="True">
+                                                    <Setter
+                                                        TargetName="pickerLivePreview"
+                                                        Property="Visibility"
+                                                        Value="Collapsed" />
+                                                    <Setter
+                                                        TargetName="pickerIconPreview"
+                                                        Property="Visibility"
+                                                        Value="Visible" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

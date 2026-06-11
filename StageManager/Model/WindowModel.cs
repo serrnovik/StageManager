@@ -87,10 +87,13 @@ namespace StageManager.Model
 				RaisePropertyChanged(nameof(Title));
 				RaisePropertyChanged(nameof(Handle));
 				RaisePropertyChanged(nameof(Icon));
+				RaisePropertyChanged(nameof(IsMinimized));
 			}
 		}
 
 		public IntPtr Handle => _window?.Handle ?? IntPtr.Zero;
+
+		public bool IsMinimized => _window?.IsMinimized ?? false;
 
 		public void Focus() => _window?.Focus();
 	}

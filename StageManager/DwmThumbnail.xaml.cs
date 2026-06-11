@@ -146,7 +146,16 @@ namespace StageManager
 			if (host is null)
 				return;
 
-			var previewBounds = BoundsRelativeTo(this, host);
+			Rect previewBounds;
+			try
+			{
+				previewBounds = BoundsRelativeTo(this, host);
+			}
+			catch (InvalidOperationException)
+			{
+				ReleaseCapture();
+				return;
+			}
 
 			var thumbnailRect = new RECT
 			{
