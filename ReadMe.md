@@ -1,61 +1,33 @@
 # Stage Manager for Windows
 
-This is an experimental approach to bring the macOS [Stage Manager](https://support.apple.com/en-us/HT213315) to Microsoft Windows.
+This project is a fork of the original, not updated for 3 years (as of 06/2026), [awaescher/StageManager](https://github.com/awaescher/StageManager) prototype, bringing the macOS [Stage Manager](https://support.apple.com/en-us/HT213315) experience to Windows.
 
-> **Important:** This is a prototype and a feasibility study - I am not actively developing this project at the moment but I'd be happy to review and merge pull requests. 
+This fork introduces support for **multiple virtual workspaces (desktops)**, **application window grouping**, and crucial bug fixes to make the application more stable, polished, and production-ready.
 
-![Stage Manager](media/StageManager%20Basics.gif)
+![Stage Manager](media/StageManagerV0.1.png)
 
-This prototype groups applications by their process. By switching between so called "scenes" on the left, Stage Manager hides other windows and the desktop icons, helping you to focus.
+## Key Improvements & Fixes in this Fork
 
-Windows can be moved from one scene to another by dragging them onto scenes on the left.
+- **Virtual Desktop Support**: Fully resolved window tracking and identification issues when using multiple virtual desktops.
+- **Window Grouping**: Added support for grouping windows by application/process.
+- **Modernized Codebase**: Upgraded to **.NET 10** and refactored the codebase to use modern C# language features.
+- **Tray Icon Integration**: Added a system tray icon to easily control, start, stop, and exit the application.
+- **Visual Polish & Micro-Animations**: Added smooth scale-up animations on hover, natural icon tilt offsets, and improved live DWM thumbnail selection.
+- **CI/CD & Installer**: Added an Inno Setup installer script (`installer/StageManager.iss`), a publication script (`publish.ps1`), and GitHub Actions release workflows for automated builds.
 
 ## Usage
 
-Download and run the executable from the [Releases tab](https://github.com/awaescher/StageManager/releases/) or 
- - clone this repository
- - cd into the repository directory
- - run `dotnet run --project StageManager`
+Download the latest installer or:
+- Clone this repository
+- `cd` into the repository directory
+- Run `dotnet run --project StageManager`
 
 To quit, find the app's tray icon (Windows might move it into the overflow menu) and use its context menu to close the app.
  
 ### Requirements
- - Windows 10 version 2004 or newer
- - [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download)
+- Windows 10 version 2004 or newer
+- [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download)
 
-## To do
-
-This is an experimental fun project. I don't have any idea whether or not this is going to be a final product one day. 
-
-|Topic|State|
-|-|-|
-|**Experimental stage**||
-|initial windows grouping by process|✅|
-|3D display of opened windows (static)|✅|
-|hide/show windows of given scenes|✅|
-|hide/show desktop icons|✅|
-|scene management with drag&drop|✅|
-|restore windows on quit/restart|✅|
-|auto hide & fly-in scenes for maximized windows|✅|
-|full screenshots for windows that were minimized on startup|✅|
-|drag windows from other scenes into the current one|✅|
-|place screenshots in relative size of the desktop|⬜|
-|limit maximum scenes (like 6 for macOS?)|✅|
-|limit window count per scene (like newest 5)|⬜|
-|tray icon to start & stop|✅|
-|start with Windows|✅|
-|**Product stage**||
-|virtual desktop support (pin window)|⬜|
-|multi-monitor support|⬜|
-|visual feedback when dragging windows from other scenes|⬜|
-|feature parity with macOS Stage Manager|⬜|
-|**Polishing stage**||
-|window animations|⬜|
-|live dwm thumbnails|✅|
-|adjust 3D angle according to screen position|⬜|
-|flyover sidebar in desktop view mode if icons are close to the left|⬜|
-
-Contributions very welcome :heart:
 
 ---
 
