@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -9,12 +9,12 @@ namespace StageManager.Model
 	[System.Diagnostics.DebuggerDisplay("{Title}")]
 	public class SceneModel : INotifyPropertyChanged
 	{
-		public event PropertyChangedEventHandler PropertyChanged;
+		public event PropertyChangedEventHandler? PropertyChanged;
 		private bool _isVisible;
 		private bool _isWindowPickerOpen;
 		private bool _isOverflowGroup;
 		private string _overflowTitle = "More windows";
-		private Scene _scene;
+		private Scene? _scene;
 
 		public static SceneModel FromScene(Scene scene)
 		{
@@ -140,7 +140,7 @@ namespace StageManager.Model
 
 		public Guid Id { get; set; }
 
-		public Scene Scene
+		public Scene? Scene
 		{
 			get => _scene;
 			private set

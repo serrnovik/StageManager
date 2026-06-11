@@ -1,5 +1,7 @@
 using StageManager.Native.PInvoke;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace StageManager.Native
@@ -16,14 +18,15 @@ namespace StageManager.Native
 
 		public void MoveWindowToCurrentDesktop(IntPtr windowHandle)
 		{
+			MoveWindowToCurrentDesktop(windowHandle, Enumerable.Empty<IntPtr>());
+		}
+
+		public void MoveWindowToCurrentDesktop(IntPtr windowHandle, IEnumerable<IntPtr> candidateWindowHandles)
+		{
 			if (windowHandle == IntPtr.Zero)
 				return;
 
-			var foregroundHandle = Win32.GetForegroundWindow();
-			if (foregroundHandle == IntPtr.Zero || foregroundHandle == windowHandle)
-				return;
-
-			var currentDesktopId = GetCurrentDesktopId(windowHandle);
+			var currentDesktopId = GetCurrentDesktopId(candidateWindowHandles, windowHandle);
 			if (currentDesktopId is null)
 				return;
 
@@ -36,13 +39,23 @@ namespace StageManager.Native
 
 		public Guid? GetCurrentDesktopId(IntPtr excludedWindowHandle = default)
 		{
+			return GetCurrentDesktopId(Enumerable.Empty<IntPtr>(), excludedWindowHandle);
+		}
+
+		public Guid? GetCurrentDesktopId(IEnumerable<IntPtr> candidateWindowHandles, IntPtr excludedWindowHandle = default)
+		{
 			var foregroundHandle = Win32.GetForegroundWindow();
-			if (foregroundHandle != IntPtr.Zero
-				&& foregroundHandle != excludedWindowHandle
-				&& TryGetWindowDesktopId(foregroundHandle, out var currentDesktopId))
+			if (TryRememberCurrentDesktopId(foregroundHandle, excludedWindowHandle, requireVisible: true, out var currentDesktopId))
+				return currentDesktopId;
+
+			foreach (var handle in candidateWindowHandles.Where(h => h != IntPtr.Zero).Distinct())
 			{
-				_lastKnownCurrentDesktopId = currentDesktopId;
+				if (TryRememberCurrentDesktopId(handle, excludedWindowHandle, requireVisible: true, out currentDesktopId))
+					return currentDesktopId;
 			}
+
+			if (TryRememberCurrentDesktopId(foregroundHandle, excludedWindowHandle, requireVisible: false, out currentDesktopId))
+				return currentDesktopId;
 
 			return _lastKnownCurrentDesktopId;
 		}
@@ -70,6 +83,23 @@ namespace StageManager.Native
 		{
 			desktopId = default;
 			return windowHandle != IntPtr.Zero && _manager.GetWindowDesktopId(windowHandle, out desktopId) == 0;
+		}
+
+		private bool TryRememberCurrentDesktopId(IntPtr windowHandle, IntPtr excludedWindowHandle, bool requireVisible, out Guid desktopId)
+		{
+			desktopId = default;
+
+			if (windowHandle == IntPtr.Zero || windowHandle == excludedWindowHandle)
+				return false;
+
+			if (requireVisible && Win32Helper.IsCloaked(windowHandle))
+				return false;
+
+			if (!TryGetWindowDesktopId(windowHandle, out desktopId))
+				return false;
+
+			_lastKnownCurrentDesktopId = desktopId;
+			return true;
 		}
 
 		[ComImport]

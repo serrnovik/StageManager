@@ -1,4 +1,4 @@
-﻿using StageManager.Native.Interop;
+using StageManager.Native.Interop;
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,7 +23,7 @@ namespace StageManager
 		private IntPtr _dwmThumbnail;
 		private IntPtr _registeredPreviewHandle;
 		private IntPtr _registeredHostHandle;
-		private Window _window;
+		private Window? _window;
 		private Point? _dpiScaleFactor;
 		private RECT? _lastThumbnailRect;
 
@@ -128,9 +128,9 @@ namespace StageManager
 			_lastThumbnailRect = null;
 		}
 
-		private Window FindWindow() => _window ??= Window.GetWindow(this);
+		private Window? FindWindow() => _window ??= Window.GetWindow(this);
 
-		private Visual FindHostVisual()
+		private Visual? FindHostVisual()
 		{
 			return PresentationSource.FromVisual(this)?.RootVisual as Visual ?? FindWindow();
 		}

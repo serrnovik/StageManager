@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using StageManager.Native.PInvoke;
 using System;
 using System.Runtime.InteropServices;
@@ -9,13 +9,13 @@ namespace StageManager
 	internal class Desktop
 	{
 		[DllImport("user32.dll", SetLastError = true)]
-		static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+		static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
 
 		[DllImport("user32.dll", CharSet = CharSet.Auto)]
 		static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
 
 		[DllImport("user32.dll", SetLastError = true)]
-		public static extern IntPtr FindWindowEx(IntPtr parentHandle, IntPtr childAfter, string className, string windowTitle);
+		public static extern IntPtr FindWindowEx(IntPtr parentHandle, IntPtr childAfter, string? className, string? windowTitle);
 
 		[DllImport("user32.dll", SetLastError = false)]
 		static extern IntPtr GetDesktopWindow();

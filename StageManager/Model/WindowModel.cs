@@ -1,4 +1,4 @@
-﻿using StageManager.Native;
+using StageManager.Native;
 using StageManager.Native.Window;
 using System;
 using System.ComponentModel;
@@ -19,13 +19,13 @@ namespace StageManager.Model
 		public static extern bool DeleteObject([In] IntPtr hObject);
 
 		private IWindow _window;
-		private ImageSource _iconSource;
+		private ImageSource? _iconSource;
 
-		public event PropertyChangedEventHandler PropertyChanged;
+		public event PropertyChangedEventHandler? PropertyChanged;
 
 		public WindowModel(IWindow window)
 		{
-			Window = window ?? throw new ArgumentNullException(nameof(window));
+			_window = window ?? throw new ArgumentNullException(nameof(window));
 		}
 
 		private void RaisePropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string memberName = "")
@@ -35,7 +35,7 @@ namespace StageManager.Model
 
 		public string Title => _window.Title.Length > 20 ? _window.Title.Substring(0, 17) + " ..." : _window.Title;
 
-		public ImageSource ImageSourceFromBitmap(System.Drawing.Bitmap bmp)
+		public ImageSource? ImageSourceFromBitmap(System.Drawing.Bitmap? bmp)
 		{
 			if (bmp is null)
 				return null;
@@ -48,7 +48,7 @@ namespace StageManager.Model
 			finally { DeleteObject(handle); }
 		}
 
-		public static ImageSource IconToImageSource(System.Drawing.Icon icon)
+		public static ImageSource? IconToImageSource(System.Drawing.Icon? icon)
 		{
 			if (icon is null)
 				return null;
@@ -62,7 +62,7 @@ namespace StageManager.Model
 			return imageSource;
 		}
 
-		public ImageSource Icon
+		public ImageSource? Icon
 		{
 			get
 			{

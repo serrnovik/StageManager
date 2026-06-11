@@ -1,4 +1,4 @@
-﻿using AsyncAwaitBestPractices;
+using AsyncAwaitBestPractices;
 using Microsoft.Xaml.Behaviors.Core;
 using SharpHook;
 using StageManager.Model;
@@ -37,14 +37,14 @@ namespace StageManager
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
 		private IntPtr _thisHandle;
-		private TaskPoolGlobalHook _hook;
+		private TaskPoolGlobalHook? _hook;
 		private WindowMode _mode;
 		private double _lastWidth;
 		private int _visibleSceneCapacity = FALLBACK_VISIBLE_SCENES;
 		private Timer _overlapCheckTimer;
 		private Point _mouse = new Point(0, 0);
-		private SceneModel _removedCurrentScene;
-		private SceneModel _mouseDownScene;
+		private SceneModel? _removedCurrentScene;
+		private SceneModel? _mouseDownScene;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private bool _isStageManagerEnabled;
@@ -131,7 +131,7 @@ namespace StageManager
 
 		private void AddInitialScenes()
 		{
-			var initialScenes = SceneManager.GetScenes().ToArray();
+			var initialScenes = SceneManager?.GetScenes().ToArray() ?? Array.Empty<Scene>();
 			for (int i = 0; i < initialScenes.Length; i++)
 			{
 				var model = SceneModel.FromScene(initialScenes[i]);
@@ -160,7 +160,7 @@ namespace StageManager
 			UpdateVisibleSceneCapacity();
 		}
 
-		private void SceneManager_SceneChanged(object sender, SceneChangedEventArgs e)
+		private void SceneManager_SceneChanged(object? sender, SceneChangedEventArgs e)
 		{
 			this.Dispatcher.Invoke(() =>
 			{
@@ -226,24 +226,24 @@ namespace StageManager
 				{
 					var sceneModel = FindSceneByPoint(screenPoint);
 
-					if (sceneModel is object && !sceneModel.IsOverflowGroup)
-						SceneManager.MoveWindow(foregroundWindow, sceneModel.Scene).SafeFireAndForget();
+					if (sceneModel is object && !sceneModel.IsOverflowGroup && sceneModel.Scene is object)
+						SceneManager?.MoveWindow(foregroundWindow, sceneModel.Scene).SafeFireAndForget();
 				});
 			}
 
 			if (EnableWindowPullToScene)
 			{
-				if (e.Data.X > _lastWidth && _mouseDownScene is object && !_mouseDownScene.IsOverflowGroup)
+				if (e.Data.X > _lastWidth && _mouseDownScene is object && !_mouseDownScene.IsOverflowGroup && _mouseDownScene.Scene is object)
 				{
 					this.Dispatcher.Invoke(() =>
 					{
-						SceneManager.PopWindowFrom(_mouseDownScene.Scene).SafeFireAndForget();
+						SceneManager?.PopWindowFrom(_mouseDownScene.Scene).SafeFireAndForget();
 					});
 				}
 			}
 		}
 
-		private SceneModel FindSceneByPoint(Point p)
+		private SceneModel? FindSceneByPoint(Point p)
 		{
 			var thisWindow = new WindowsWindow(_thisHandle);
 			var pointOnWindow = new Point(p.X - thisWindow.Location.X, p.Y - thisWindow.Location.Y);
@@ -253,7 +253,7 @@ namespace StageManager
 			pointOnWindow.X /= dpi.DpiScaleX;
 			pointOnWindow.Y /= dpi.DpiScaleY;
 
-			SceneModel model = null;
+			SceneModel? model = null;
 
 			var element = VisualTreeHelper.HitTest(this, pointOnWindow)?.VisualHit;
 
@@ -323,7 +323,7 @@ namespace StageManager
 		{
 			try
 			{
-				return _virtualDesktopManager.GetCurrentDesktopId(_thisHandle);
+				return _virtualDesktopManager.GetCurrentDesktopId(GetKnownWindowHandles(), _thisHandle);
 			}
 			catch (COMException)
 			{
@@ -439,7 +439,14 @@ namespace StageManager
 
 		public ObservableCollection<SceneModel> Scenes { get; } = new ObservableCollection<SceneModel>();
 
-		public IEnumerable<SceneModel> AllScenes => Scenes.Union(new[] { _removedCurrentScene });
+		public IEnumerable<SceneModel> AllScenes
+		{
+			get
+			{
+				var removed = _removedCurrentScene;
+				return removed is null ? Scenes : Scenes.Concat(new[] { removed });
+			}
+		}
 
 		public ICommand SwitchSceneCommand { get; }
 
@@ -447,7 +454,7 @@ namespace StageManager
 
 		public ICommand ActivateWindowCommand { get; }
 
-		public SceneManager SceneManager { get; private set; }
+		public SceneManager? SceneManager { get; private set; }
 
 		public IntPtr Handle => _thisHandle;
 
@@ -564,6 +571,20 @@ namespace StageManager
 
 		private void WindowsManager_DesktopChanged(object? sender, EventArgs e)
 		{
+			RefreshAfterDesktopChanged().SafeFireAndForget();
+		}
+
+		private async Task RefreshAfterDesktopChanged()
+		{
+			await Task.Delay(250).ConfigureAwait(false);
+			RefreshForCurrentDesktop();
+
+			await Task.Delay(500).ConfigureAwait(false);
+			RefreshForCurrentDesktop();
+		}
+
+		private void RefreshForCurrentDesktop()
+		{
 			Dispatcher.Invoke(() =>
 			{
 				EnsureStageManagerOnCurrentDesktop();
@@ -679,7 +700,7 @@ namespace StageManager
 		{
 			try
 			{
-				_virtualDesktopManager.MoveWindowToCurrentDesktop(_thisHandle);
+				_virtualDesktopManager.MoveWindowToCurrentDesktop(_thisHandle, GetKnownWindowHandles());
 			}
 			catch (COMException)
 			{
@@ -687,6 +708,15 @@ namespace StageManager
 			catch (InvalidCastException)
 			{
 			}
+		}
+
+		private IEnumerable<IntPtr> GetKnownWindowHandles()
+		{
+			return AllScenes
+				.SelectMany(scene => scene.Windows)
+				.Select(window => window.Handle)
+				.Where(handle => handle != IntPtr.Zero)
+				.ToArray();
 		}
 
 		private void ContextMenu_Closed(object sender, RoutedEventArgs e)

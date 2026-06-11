@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -22,9 +22,9 @@ namespace StageManager.Native
 		private WinEventDelegate _hookDelegate;
 		private readonly List<IntPtr> _winEventHooks = new List<IntPtr>();
 
-		private WindowsWindow _mouseMoveWindow;
+		private WindowsWindow? _mouseMoveWindow;
 		private readonly object _mouseMoveLock = new object();
-		private Win32.HookProc _mouseHook;
+		private Win32.HookProc? _mouseHook;
 
 		private Dictionary<WindowsWindow, bool> _floating;
 		private IntPtr _currentProcessWindowHandle;
@@ -33,37 +33,37 @@ namespace StageManager.Native
 		/// <summary>
 		/// Notifies when a new window handle was created by the manager
 		/// </summary>
-		public event WindowCreateDelegate WindowCreated;
+		public event WindowCreateDelegate? WindowCreated;
 		/// <summary>
 		/// Notifies when a handled window was removed by the manager
 		/// </summary>
-		public event WindowDelegate WindowDestroyed;
+		public event WindowDelegate? WindowDestroyed;
 		/// <summary>
 		/// Notifies when a handled window was updated by the manager
 		/// This is used internally by the workspace manager to apply the update to the window
 		/// </summary>
-		public event WindowUpdateDelegate WindowUpdated;
+		public event WindowUpdateDelegate? WindowUpdated;
 
-		public event EventHandler<IntPtr> UntrackedFocus;
-		public event EventHandler DesktopChanged;
+		public event EventHandler<IntPtr>? UntrackedFocus;
+		public event EventHandler? DesktopChanged;
 
 		/// <summary>
 		/// Notifies when a window focuses itself
 		/// </summary>
-		public event WindowFocusDelegate WindowFocused;
+		public event WindowFocusDelegate? WindowFocused;
 
-		public event EventHandler WindowMoved;
+		public event EventHandler? WindowMoved;
 
 		/// <summary>
 		/// Notifies when a window updated itself
 		/// This is used to externally notify when an update was applied to a window
 		/// </summary>
-		public event WindowDelegate ExternalWindowUpdate;
+		public event WindowDelegate? ExternalWindowUpdate;
 		/// <summary>
 		/// Notifies when a window closes itself
 		/// This is used to externally notify when a window was closed
 		/// </summary>
-		public event WindowDelegate ExternalWindowClosed;
+		public event WindowDelegate? ExternalWindowClosed;
 
 		public IEnumerable<IWindow> Windows => _windows.Values.ToArray();
 
@@ -103,7 +103,11 @@ namespace StageManager.Native
 
 			var thread = new Thread(() =>
 			{
-				Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, _mouseHook, currentProcess.MainModule.BaseAddress, 0);
+				if (_mouseHook is not null)
+				{
+					var baseAddress = currentProcess.MainModule?.BaseAddress ?? IntPtr.Zero;
+					Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, _mouseHook, baseAddress, 0);
+				}
 				Application.Run();
 			});
 

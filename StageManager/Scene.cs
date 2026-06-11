@@ -1,4 +1,4 @@
-﻿using StageManager.Native.Window;
+using StageManager.Native.Window;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,11 +9,11 @@ namespace StageManager
     [System.Diagnostics.DebuggerDisplay("{Title}")]
 	public class Scene
 	{
-		public event EventHandler SelectedChanged;
+		public event EventHandler? SelectedChanged;
 
 		public Guid Id { get; } = Guid.NewGuid();
 
-		public string Title { get; private set; }
+		public string Title { get; private set; } = string.Empty;
 
 		public IEnumerable<IWindow> Windows => _windows.ToArray();
 
