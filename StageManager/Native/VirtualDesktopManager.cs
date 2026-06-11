@@ -62,7 +62,13 @@ namespace StageManager.Native
 
 		public bool IsWindowOnCurrentDesktop(IntPtr windowHandle)
 		{
-			return IsWindowOnDesktop(windowHandle, GetCurrentDesktopId());
+			if (windowHandle == IntPtr.Zero)
+				return false;
+
+			if (Win32Helper.IsCloaked(windowHandle))
+				return false;
+
+			return _manager.IsWindowOnCurrentVirtualDesktop(windowHandle, out var isOnCurrentDesktop) == 0 && isOnCurrentDesktop;
 		}
 
 		public bool IsWindowOnDesktop(IntPtr windowHandle, Guid? desktopId)
@@ -76,7 +82,7 @@ namespace StageManager.Native
 			if (desktopId is object && TryGetWindowDesktopId(windowHandle, out var windowDesktopId))
 				return windowDesktopId == desktopId.Value;
 
-			return _manager.IsWindowOnCurrentVirtualDesktop(windowHandle, out var isOnCurrentDesktop) == 0 && isOnCurrentDesktop;
+			return IsWindowOnCurrentDesktop(windowHandle);
 		}
 
 		private bool TryGetWindowDesktopId(IntPtr windowHandle, out Guid desktopId)

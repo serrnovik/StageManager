@@ -272,10 +272,9 @@ namespace StageManager
 		}
 		private void SyncVisibilityByUpdatedTimeStamp()
 		{
-			var currentDesktopId = GetCurrentDesktopId();
 			var regularScenes = Scenes.Where(s => !s.IsOverflowGroup).ToArray();
 			foreach (var scene in regularScenes)
-				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle, currentDesktopId));
+				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle));
 
 			var currentDesktopScenes = regularScenes
 				.Where(s => s.DisplayWindows.Any())
@@ -335,11 +334,11 @@ namespace StageManager
 			}
 		}
 
-		private bool IsWindowOnCurrentDesktop(IntPtr handle, Guid? currentDesktopId)
+		private bool IsWindowOnCurrentDesktop(IntPtr handle)
 		{
 			try
 			{
-				return _virtualDesktopManager.IsWindowOnDesktop(handle, currentDesktopId);
+				return _virtualDesktopManager.IsWindowOnCurrentDesktop(handle);
 			}
 			catch (COMException)
 			{
