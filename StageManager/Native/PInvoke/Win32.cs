@@ -66,6 +66,10 @@ namespace StageManager.Native.PInvoke
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
         public static readonly int MF_BYCOMMAND = 0x00000000;
 
         [DllImport("user32.dll")]

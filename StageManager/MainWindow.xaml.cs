@@ -20,7 +20,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using Microsoft.Win32;
+using System.Windows.Interop;
 
 namespace StageManager
 {
@@ -37,9 +37,25 @@ namespace StageManager
 		private const double SCENE_SLOT_HEIGHT = 184.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
-		private const string SETTINGS_REG_KEY = @"SOFTWARE\StageManager";
 		private const string AUTO_HIDE_ICONS_VALUE = "AutoHideStageManagerIcons";
+		private const string TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE = "ToggleStageManagerShortcut";
+		private const string TOGGLE_AUTO_HIDE_SHORTCUT_VALUE = "ToggleAutoHideShortcut";
+		private const string REVEAL_STAGE_MANAGER_SHORTCUT_VALUE = "RevealStageManagerShortcut";
+		private const int WM_HOTKEY = 0x0312;
+		private const int TOGGLE_STAGE_MANAGER_HOTKEY_ID = 1001;
+		private const int TOGGLE_AUTO_HIDE_HOTKEY_ID = 1002;
+		private const int REVEAL_STAGE_MANAGER_HOTKEY_ID = 1003;
+		private const uint MOD_ALT = 0x0001;
+		private const uint MOD_CONTROL = 0x0002;
+		private const uint MOD_SHIFT = 0x0004;
+		private const uint MOD_WIN = 0x0008;
+		private const uint MOD_NOREPEAT = 0x4000;
+		private static readonly TimeSpan RevealDuration = TimeSpan.FromSeconds(4);
+		public static readonly ShortcutGesture DefaultToggleStageManagerShortcut = ShortcutGesture.Parse("Ctrl+F11");
+		public static readonly ShortcutGesture DefaultToggleAutoHideShortcut = ShortcutGesture.Parse("Ctrl+Alt+F11");
+		public static readonly ShortcutGesture DefaultRevealStageManagerShortcut = ShortcutGesture.Parse("Ctrl+Shift+F11");
 		private IntPtr _thisHandle;
+		private HwndSource? _hwndSource;
 		private TaskPoolGlobalHook? _hook;
 		private WindowMode _mode;
 		private double _lastWidth;
@@ -50,8 +66,13 @@ namespace StageManager
 		private SceneModel? _mouseDownScene;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
-		private bool _autoHideStageManagerIcons = ReadBoolSetting(AUTO_HIDE_ICONS_VALUE, defaultValue: true);
+		private ShortcutGesture _toggleStageManagerShortcut = ReadShortcutSetting(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, DefaultToggleStageManagerShortcut);
+		private ShortcutGesture _toggleAutoHideShortcut = ReadShortcutSetting(TOGGLE_AUTO_HIDE_SHORTCUT_VALUE, DefaultToggleAutoHideShortcut);
+		private ShortcutGesture _revealStageManagerShortcut = ReadShortcutSetting(REVEAL_STAGE_MANAGER_SHORTCUT_VALUE, DefaultRevealStageManagerShortcut);
+		private bool _autoHideStageManagerIcons = AppSettings.ReadBool(AUTO_HIDE_ICONS_VALUE, defaultValue: true);
 		private bool _isStageManagerEnabled;
+		private DateTime _revealUntilUtc = DateTime.MinValue;
+		private SettingsWindow? _settingsWindow;
 
 		public bool EnableWindowDropToScene = false;
 		public bool EnableWindowPullToScene = true;
@@ -90,8 +111,20 @@ namespace StageManager
 			_lastWidth = Width;
 		}
 
+		protected override void OnSourceInitialized(EventArgs e)
+		{
+			base.OnSourceInitialized(e);
+
+			_thisHandle = new WindowInteropHelper(this).Handle;
+			_hwndSource = HwndSource.FromHwnd(_thisHandle);
+			_hwndSource?.AddHook(WndProc);
+			RegisterGlobalHotkeys();
+		}
+
 		protected override void OnClosed(EventArgs e)
 		{
+			UnregisterGlobalHotkeys();
+			_hwndSource?.RemoveHook(WndProc);
 			StopHook();
 			_overlapCheckTimer.Dispose();
 
@@ -494,13 +527,19 @@ namespace StageManager
 					return;
 
 				_autoHideStageManagerIcons = value;
-				WriteBoolSetting(AUTO_HIDE_ICONS_VALUE, value);
+				AppSettings.WriteBool(AUTO_HIDE_ICONS_VALUE, value);
 				OnPropertyChanged(nameof(AutoHideStageManagerIcons));
 
 				if (!value)
 					Mode = WindowMode.OnScreen;
 			}
 		}
+
+		public ShortcutGesture ToggleStageManagerShortcut => _toggleStageManagerShortcut;
+
+		public ShortcutGesture ToggleAutoHideShortcut => _toggleAutoHideShortcut;
+
+		public ShortcutGesture RevealStageManagerShortcut => _revealStageManagerShortcut;
 
 		public WindowMode Mode
 		{
@@ -619,6 +658,12 @@ namespace StageManager
 
 		private void UpdateModeByWindows(IEnumerable<IWindow> windows)
 		{
+			if (DateTime.UtcNow < _revealUntilUtc)
+			{
+				Dispatcher.Invoke(() => Mode = WindowMode.Flyover);
+				return;
+			}
+
 			if (!AutoHideStageManagerIcons)
 			{
 				Dispatcher.Invoke(() => Mode = WindowMode.OnScreen);
@@ -657,22 +702,43 @@ namespace StageManager
 			set => AutoStart.SetStartup(APP_NAME, value);
 		}
 
-		private static bool ReadBoolSetting(string name, bool defaultValue)
+		public void UpdateShortcutSettings(
+			ShortcutGesture toggleStageManagerShortcut,
+			ShortcutGesture toggleAutoHideShortcut,
+			ShortcutGesture revealStageManagerShortcut,
+			bool autoHideStageManagerIcons)
 		{
-			using var key = Registry.CurrentUser.OpenSubKey(SETTINGS_REG_KEY);
-			var value = key?.GetValue(name)?.ToString();
-			return bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+			_toggleStageManagerShortcut = toggleStageManagerShortcut;
+			_toggleAutoHideShortcut = toggleAutoHideShortcut;
+			_revealStageManagerShortcut = revealStageManagerShortcut;
+
+			AppSettings.WriteString(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, toggleStageManagerShortcut.DisplayText);
+			AppSettings.WriteString(TOGGLE_AUTO_HIDE_SHORTCUT_VALUE, toggleAutoHideShortcut.DisplayText);
+			AppSettings.WriteString(REVEAL_STAGE_MANAGER_SHORTCUT_VALUE, revealStageManagerShortcut.DisplayText);
+
+			AutoHideStageManagerIcons = autoHideStageManagerIcons;
+
+			OnPropertyChanged(nameof(ToggleStageManagerShortcut));
+			OnPropertyChanged(nameof(ToggleAutoHideShortcut));
+			OnPropertyChanged(nameof(RevealStageManagerShortcut));
+
+			RegisterGlobalHotkeys();
 		}
 
-		private static void WriteBoolSetting(string name, bool value)
+		private static ShortcutGesture ReadShortcutSetting(string name, ShortcutGesture defaultValue)
 		{
-			using var key = Registry.CurrentUser.CreateSubKey(SETTINGS_REG_KEY, writable: true);
-			key?.SetValue(name, value.ToString());
+			var shortcut = ShortcutGesture.Parse(AppSettings.ReadString(name, defaultValue.DisplayText));
+			return shortcut.IsEmpty ? defaultValue : shortcut;
 		}
 
 		private void MenuItem_ProjectPage_Click(object sender, RoutedEventArgs e)
 		{
 			NavigateToProjectPage();
+		}
+
+		private void MenuItem_Settings_Click(object sender, RoutedEventArgs e)
+		{
+			ShowSettingsWindow();
 		}
 
 		private void MenuItem_Quit_Click(object sender, RoutedEventArgs e)
@@ -760,6 +826,108 @@ namespace StageManager
 		{
 			foreach (var scene in AllScenes.Where(s => s is object))
 				scene.IsWindowPickerOpen = false;
+		}
+
+		private void ShowSettingsWindow()
+		{
+			if (_settingsWindow is { IsVisible: true })
+			{
+				_settingsWindow.Activate();
+				return;
+			}
+
+			UnregisterGlobalHotkeys();
+			_settingsWindow = new SettingsWindow(this);
+			_settingsWindow.Closed += (_, _) =>
+			{
+				_settingsWindow = null;
+				RegisterGlobalHotkeys();
+			};
+			_settingsWindow.Show();
+			_settingsWindow.Activate();
+		}
+
+		private void RegisterGlobalHotkeys()
+		{
+			if (_thisHandle == IntPtr.Zero)
+				return;
+
+			UnregisterGlobalHotkeys();
+			RegisterGlobalHotkey(TOGGLE_STAGE_MANAGER_HOTKEY_ID, ToggleStageManagerShortcut);
+			RegisterGlobalHotkey(TOGGLE_AUTO_HIDE_HOTKEY_ID, ToggleAutoHideShortcut);
+			RegisterGlobalHotkey(REVEAL_STAGE_MANAGER_HOTKEY_ID, RevealStageManagerShortcut);
+		}
+
+		private void RegisterGlobalHotkey(int id, ShortcutGesture shortcut)
+		{
+			if (shortcut.IsEmpty)
+				return;
+
+			var virtualKey = KeyInterop.VirtualKeyFromKey(shortcut.Key);
+			if (virtualKey == 0)
+				return;
+
+			Win32.RegisterHotKey(_thisHandle, id, GetHotkeyModifiers(shortcut), (uint)virtualKey);
+		}
+
+		private void UnregisterGlobalHotkeys()
+		{
+			if (_thisHandle == IntPtr.Zero)
+				return;
+
+			Win32.UnregisterHotKey(_thisHandle, TOGGLE_STAGE_MANAGER_HOTKEY_ID);
+			Win32.UnregisterHotKey(_thisHandle, TOGGLE_AUTO_HIDE_HOTKEY_ID);
+			Win32.UnregisterHotKey(_thisHandle, REVEAL_STAGE_MANAGER_HOTKEY_ID);
+		}
+
+		private static uint GetHotkeyModifiers(ShortcutGesture shortcut)
+		{
+			uint modifiers = MOD_NOREPEAT;
+			if (shortcut.Control)
+				modifiers |= MOD_CONTROL;
+			if (shortcut.Alt)
+				modifiers |= MOD_ALT;
+			if (shortcut.Shift)
+				modifiers |= MOD_SHIFT;
+			if (shortcut.Windows)
+				modifiers |= MOD_WIN;
+
+			return modifiers;
+		}
+
+		private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+		{
+			if (msg != WM_HOTKEY)
+				return IntPtr.Zero;
+
+			handled = true;
+			switch (wParam.ToInt32())
+			{
+				case TOGGLE_STAGE_MANAGER_HOTKEY_ID:
+					IsStageManagerEnabled = !IsStageManagerEnabled;
+					break;
+				case TOGGLE_AUTO_HIDE_HOTKEY_ID:
+					AutoHideStageManagerIcons = !AutoHideStageManagerIcons;
+					break;
+				case REVEAL_STAGE_MANAGER_HOTKEY_ID:
+					RevealStageManagerItems();
+					break;
+			}
+
+			return IntPtr.Zero;
+		}
+
+		private void RevealStageManagerItems()
+		{
+			_revealUntilUtc = DateTime.UtcNow.Add(RevealDuration);
+
+			if (!IsStageManagerEnabled)
+				IsStageManagerEnabled = true;
+
+			Show();
+			EnsureStageManagerOnCurrentDesktop();
+			Mode = WindowMode.Flyover;
+			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
 		}
 
 		private void EnsureStageManagerOnCurrentDesktop()

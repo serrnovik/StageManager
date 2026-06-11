@@ -592,6 +592,9 @@
                         IsCheckable="True"
                         IsChecked="{Binding AutoHideStageManagerIcons, Mode=TwoWay}" />
                     <MenuItem
+                        Header="Settings"
+                        Click="MenuItem_Settings_Click" />
+                    <MenuItem
                         Header="Project page"
                         Click="MenuItem_ProjectPage_Click" />
                     <Separator />
