@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -28,16 +31,36 @@ jobs:
 
       - name: Build installer
         shell: pwsh
-        run: iscc .\installer\StageManager.iss
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+          if (-not $iscc) {
+            throw "ISCC.exe was not found after installing Inno Setup."
+          }
+
+          & $iscc .\installer\StageManager.iss
 
       - name: Zip portable build
         shell: pwsh
-        run: Compress-Archive -Path .\publish\StageManager-win-x64\* -DestinationPath .\dist\StageManager-portable-win-x64.zip -Force
+        run: |
+          New-Item -ItemType Directory -Path .\dist -Force
+          Compress-Archive -Path .\publish\StageManager-win-x64\* -DestinationPath .\dist\StageManager-portable-win-x64.zip -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: StageManager-windows
           path: |
+            dist\StageManagerSetup.exe
+            dist\StageManager-portable-win-x64.zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
             dist\StageManagerSetup.exe
             dist\StageManager-portable-win-x64.zip

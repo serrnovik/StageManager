@@ -91,9 +91,12 @@ namespace StageManager.Model
 				RaisePropertyChanged();
 				RaisePropertyChanged(nameof(Title));
 				RaisePropertyChanged(nameof(Handle));
+				RaisePropertyChanged(nameof(Icon));
 			}
 		}
 
 		public IntPtr Handle => _window?.Handle ?? IntPtr.Zero;
+
+		public void Focus() => _window?.Focus();
 	}
 }

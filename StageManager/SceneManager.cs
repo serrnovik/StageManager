@@ -6,7 +6,6 @@ using StageManager.Strategies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace StageManager
@@ -38,7 +37,7 @@ namespace StageManager
 
 		public async Task Start()
 		{
-			if (Thread.CurrentThread.ManagedThreadId != 1)
+			if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == false)
 				throw new NotSupportedException("Start has to be called on the main thread, otherwise events won't be fired.");
 
 			WindowsManager.WindowCreated += WindowsManager_WindowCreated;

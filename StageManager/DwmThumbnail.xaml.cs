@@ -2,6 +2,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace StageManager
@@ -81,7 +82,9 @@ namespace StageManager
 
 		private void StartCapture()
 		{
-			var windowHandle = new System.Windows.Interop.WindowInteropHelper(FindWindow()).Handle;
+			var windowHandle = (PresentationSource.FromVisual(this) as HwndSource)?.Handle ?? IntPtr.Zero;
+			if (windowHandle == IntPtr.Zero)
+				return;
 
 			var hr = NativeMethods.DwmRegisterThumbnail(windowHandle, PreviewHandle, out _dwmThumbnail);
 			if (hr != 0)
@@ -90,6 +93,11 @@ namespace StageManager
 
 		private Window FindWindow() => _window ??= Window.GetWindow(this);
 
+		private Visual FindHostVisual()
+		{
+			return PresentationSource.FromVisual(this)?.RootVisual as Visual ?? FindWindow();
+		}
+
 		private void UpdateThumbnailProperties()
 		{
 			if (_dwmThumbnail == IntPtr.Zero)
@@ -97,7 +105,11 @@ namespace StageManager
 
 			var dpi = GetDpiScaleFactor();
 
-			var previewBounds = BoundsRelativeTo(this, FindWindow());
+			var host = FindHostVisual();
+			if (host is null)
+				return;
+
+			var previewBounds = BoundsRelativeTo(this, host);
 
 			var thumbnailRect = new RECT
 			{

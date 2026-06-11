@@ -10,6 +10,7 @@ namespace StageManager.Model
 	{
 		public event PropertyChangedEventHandler PropertyChanged;
 		private bool _isVisible;
+		private bool _isWindowPickerOpen;
 		private Scene _scene;
 
 		public static SceneModel FromScene(Scene scene)
@@ -24,6 +25,7 @@ namespace StageManager.Model
 		public SceneModel()
 		{
 			Updated = DateTime.UtcNow;
+			RaisePropertyChanged(nameof(HasMultipleWindows));
 		}
 
 		public void UpdateFromScene(Scene updatedScene)
@@ -95,6 +97,8 @@ namespace StageManager.Model
 
 		public string Title => Scene?.Title ?? "";
 
+		public bool HasMultipleWindows => Windows.Count > 1;
+
 		public bool IsVisible
 		{
 			get => _isVisible;
@@ -105,6 +109,19 @@ namespace StageManager.Model
 					_isVisible = value;
 					RaisePropertyChanged();
 					RaisePropertyChanged(nameof(Visibility));
+				}
+			}
+		}
+
+		public bool IsWindowPickerOpen
+		{
+			get => _isWindowPickerOpen;
+			set
+			{
+				if (_isWindowPickerOpen != value)
+				{
+					_isWindowPickerOpen = value;
+					RaisePropertyChanged();
 				}
 			}
 		}

@@ -16,6 +16,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -28,12 +29,16 @@ namespace StageManager
 	public partial class MainWindow : Window, INotifyPropertyChanged
 	{
 		private const int TIMERINTERVAL_MILLISECONDS = 500;
-		private const int MAX_SCENES = 6;
+		private const int MIN_VISIBLE_SCENES = 1;
+		private const int FALLBACK_VISIBLE_SCENES = 6;
+		private const double SCENE_SLOT_HEIGHT = 158.0;
+		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
 		private IntPtr _thisHandle;
 		private TaskPoolGlobalHook _hook;
 		private WindowMode _mode;
 		private double _lastWidth;
+		private int _visibleSceneCapacity = FALLBACK_VISIBLE_SCENES;
 		private Timer _overlapCheckTimer;
 		private Point _mouse = new Point(0, 0);
 		private SceneModel _removedCurrentScene;
@@ -52,7 +57,13 @@ namespace StageManager
 
 			_overlapCheckTimer = new Timer(OverlapCheck, null, Timeout.Infinite, Timeout.Infinite);
 
-			SwitchSceneCommand = new ActionCommand(async model => await SceneManager!.SwitchTo(((SceneModel)model).Scene));
+			SwitchSceneCommand = new ActionCommand(async model =>
+			{
+				CloseWindowPickers();
+				await SceneManager!.SwitchTo(((SceneModel)model).Scene);
+			});
+			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
+			ActivateWindowCommand = new ActionCommand(async model => await ActivateWindow((WindowModel)model));
 		}
 
 		protected override void OnInitialized(EventArgs e)
@@ -90,6 +101,7 @@ namespace StageManager
 			SceneManager.SceneChanged += SceneManager_SceneChanged;
 			SceneManager.CurrentSceneSelectionChanged += SceneManager_CurrentSceneSelectionChanged;
 
+			UpdateVisibleSceneCapacity();
 			AddInitialScenes();
 
 			var foreground = Win32.GetForegroundWindow();
@@ -111,7 +123,7 @@ namespace StageManager
 			for (int i = 0; i < initialScenes.Length; i++)
 			{
 				var model = SceneModel.FromScene(initialScenes[i]);
-				model.IsVisible = i <= MAX_SCENES; // i is zero based, so it should be i+1 but one scene gets selected (and removed from the sidebar) that makes i+0 again
+				model.IsVisible = i < _visibleSceneCapacity;
 				Scenes.Add(model);
 			}
 		}
@@ -146,6 +158,7 @@ namespace StageManager
 			this.Left = 0;
 			this.Top = 0;
 			this.Height = area.Height;
+			UpdateVisibleSceneCapacity();
 		}
 
 		private void SceneManager_SceneChanged(object sender, SceneChangedEventArgs e)
@@ -261,7 +274,21 @@ namespace StageManager
 		{
 			var scenes = Scenes.OrderByDescending(s => s.Updated).ToArray();
 			for (int i = 0; i < scenes.Length; i++)
-				scenes[i].IsVisible = i < MAX_SCENES;
+				scenes[i].IsVisible = i < _visibleSceneCapacity;
+		}
+
+		private void UpdateVisibleSceneCapacity()
+		{
+			var area = this.GetMonitorWorkSize();
+			var height = area.Height > 0 ? area.Height : SystemParameters.WorkArea.Height;
+			height = Math.Max(0, height - BOTTOM_WORK_AREA_GUARD);
+			var capacity = Math.Max(MIN_VISIBLE_SCENES, (int)Math.Floor(height / SCENE_SLOT_HEIGHT));
+
+			if (capacity == _visibleSceneCapacity)
+				return;
+
+			_visibleSceneCapacity = capacity;
+			SyncVisibilityByUpdatedTimeStamp();
 		}
 
 		public ObservableCollection<SceneModel> Scenes { get; } = new ObservableCollection<SceneModel>();
@@ -269,6 +296,10 @@ namespace StageManager
 		public IEnumerable<SceneModel> AllScenes => Scenes.Union(new[] { _removedCurrentScene });
 
 		public ICommand SwitchSceneCommand { get; }
+
+		public ICommand ToggleSceneWindowPickerCommand { get; }
+
+		public ICommand ActivateWindowCommand { get; }
 
 		public SceneManager SceneManager { get; private set; }
 
@@ -429,6 +460,14 @@ namespace StageManager
 			Close();
 		}
 
+		private void WindowPickerButton_Click(object sender, RoutedEventArgs e)
+		{
+			if (sender is FrameworkElement { DataContext: SceneModel scene })
+				ToggleSceneWindowPicker(scene);
+
+			e.Handled = true;
+		}
+
 		private async Task ApplyStageManagerEnabled(bool enabled)
 		{
 			if (SceneManager is null)
@@ -449,6 +488,36 @@ namespace StageManager
 				SceneManager.Disable();
 				Hide();
 			}
+		}
+
+		private void ToggleSceneWindowPicker(SceneModel scene)
+		{
+			if (scene is null || !scene.HasMultipleWindows)
+				return;
+
+			var shouldOpen = !scene.IsWindowPickerOpen;
+			CloseWindowPickers();
+			scene.IsWindowPickerOpen = shouldOpen;
+		}
+
+		private async Task ActivateWindow(WindowModel window)
+		{
+			if (window is null || SceneManager is null)
+				return;
+
+			CloseWindowPickers();
+
+			var scene = SceneManager.FindSceneForWindow(window.Handle);
+			if (scene is object)
+				await SceneManager.SwitchTo(scene).ConfigureAwait(true);
+
+			window.Focus();
+		}
+
+		private void CloseWindowPickers()
+		{
+			foreach (var scene in AllScenes.Where(s => s is object))
+				scene.IsWindowPickerOpen = false;
 		}
 
 		private void EnsureStageManagerOnCurrentDesktop()

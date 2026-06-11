@@ -36,7 +36,11 @@ namespace StageManager.Native
 					if (intPtr != IntPtr.Zero)
 					{
 						var monitorInfoW = NativeMethods.GetMonitorInfoW(intPtr);
-						return new Size(monitorInfoW.rcWork.Width, monitorInfoW.rcWork.Height);
+						var workSize = new Point(monitorInfoW.rcWork.Width, monitorInfoW.rcWork.Height);
+						if (hwndSource.CompositionTarget is object)
+							workSize = hwndSource.CompositionTarget.TransformFromDevice.Transform(workSize);
+
+						return new Size(workSize.X, workSize.Y);
 					}
 				}
 			}
