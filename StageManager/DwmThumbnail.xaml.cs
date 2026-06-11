@@ -25,6 +25,7 @@ namespace StageManager
 		private IntPtr _registeredHostHandle;
 		private Window _window;
 		private Point? _dpiScaleFactor;
+		private RECT? _lastThumbnailRect;
 
 		public static readonly DependencyProperty PreviewHandleProperty = DependencyProperty.Register(nameof(PreviewHandle),
 			   typeof(IntPtr),
@@ -124,6 +125,7 @@ namespace StageManager
 			_dwmThumbnail = IntPtr.Zero;
 			_registeredHostHandle = IntPtr.Zero;
 			_registeredPreviewHandle = IntPtr.Zero;
+			_lastThumbnailRect = null;
 		}
 
 		private Window FindWindow() => _window ??= Window.GetWindow(this);
@@ -154,6 +156,15 @@ namespace StageManager
 				right = (int)((previewBounds.Right - Margin.Left - Margin.Right) * dpi.X) + 1
 			};
 
+			if (_lastThumbnailRect is RECT last
+				&& last.top == thumbnailRect.top
+				&& last.left == thumbnailRect.left
+				&& last.bottom == thumbnailRect.bottom
+				&& last.right == thumbnailRect.right)
+			{
+				return;
+			}
+
 			var props = new DWM_THUMBNAIL_PROPERTIES
 			{
 				fVisible = true,
@@ -163,6 +174,7 @@ namespace StageManager
 				fSourceClientAreaOnly = true
 			};
 			NativeMethods.DwmUpdateThumbnailProperties(_dwmThumbnail, ref props);
+			_lastThumbnailRect = thumbnailRect;
 		}
 	}
 }

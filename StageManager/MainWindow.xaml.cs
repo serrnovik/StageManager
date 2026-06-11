@@ -110,6 +110,7 @@ namespace StageManager
 
 			SceneManager.SceneChanged += SceneManager_SceneChanged;
 			SceneManager.CurrentSceneSelectionChanged += SceneManager_CurrentSceneSelectionChanged;
+			SceneManager.WindowsManager.DesktopChanged += WindowsManager_DesktopChanged;
 
 			UpdateVisibleSceneCapacity();
 			AddInitialScenes();
@@ -552,10 +553,18 @@ namespace StageManager
 				return;
 
 			EnsureStageManagerOnCurrentDesktop();
-			Dispatcher.Invoke(SyncVisibilityByUpdatedTimeStamp);
 
 			var currentWindows = SceneManager.GetCurrentWindows().ToArray(); // in case the enumeration changes
 			UpdateModeByWindows(currentWindows);
+		}
+
+		private void WindowsManager_DesktopChanged(object? sender, EventArgs e)
+		{
+			Dispatcher.Invoke(() =>
+			{
+				EnsureStageManagerOnCurrentDesktop();
+				SyncVisibilityByUpdatedTimeStamp();
+			});
 		}
 
 		private void UpdateModeByWindows(IEnumerable<IWindow> windows)

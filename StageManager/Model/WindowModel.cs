@@ -53,33 +53,28 @@ namespace StageManager.Model
 			if (icon is null)
 				return null;
 
-			//// TODO check memory leaks
-
-			var bmp = System.Drawing.Bitmap.FromHicon(icon.Handle);
-
 			var imageSource = Imaging.CreateBitmapSourceFromHIcon(
 				icon.Handle,
 				Int32Rect.Empty,
 				BitmapSizeOptions.FromEmptyOptions());
 
+			imageSource.Freeze();
 			return imageSource;
-
-			// Alternativ - vergleichen
-
-			//using (var stream = new MemoryStream())
-			//{
-			//	icon.ToBitmap().Save(stream, ImageFormat.Png);
-			//	var bitmapImage = new BitmapImage();
-			//	bitmapImage.BeginInit();
-			//	bitmapImage.StreamSource = new MemoryStream(stream.ToArray());
-			//	bitmapImage.EndInit();
-			//	bitmapImage.Freeze();
-
-			//	return bitmapImage;
-			//}
 		}
 
-		public ImageSource Icon => _iconSource ??= IconToImageSource((Window as WindowsWindow).ExtractIcon());
+		public ImageSource Icon
+		{
+			get
+			{
+				if (_iconSource is null && Window is WindowsWindow window)
+				{
+					using var icon = window.ExtractIcon();
+					_iconSource = IconToImageSource(icon);
+				}
+
+				return _iconSource;
+			}
+		}
 
 		public IWindow Window
 		{
