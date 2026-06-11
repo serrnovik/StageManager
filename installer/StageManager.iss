@@ -1,6 +1,6 @@
 #define MyAppName "StageManager"
 #ifndef MyAppVersion
-#define MyAppVersion "0.0.28"
+#define MyAppVersion "0.1.1"
 #endif
 #define MyAppExeName "StageManager.exe"
 

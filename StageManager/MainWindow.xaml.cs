@@ -20,6 +20,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using Microsoft.Win32;
 
 namespace StageManager
 {
@@ -36,6 +37,8 @@ namespace StageManager
 		private const double SCENE_SLOT_HEIGHT = 184.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
 		private const string APP_NAME = "StageManager";
+		private const string SETTINGS_REG_KEY = @"SOFTWARE\StageManager";
+		private const string AUTO_HIDE_ICONS_VALUE = "AutoHideStageManagerIcons";
 		private IntPtr _thisHandle;
 		private TaskPoolGlobalHook? _hook;
 		private WindowMode _mode;
@@ -47,6 +50,7 @@ namespace StageManager
 		private SceneModel? _mouseDownScene;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
+		private bool _autoHideStageManagerIcons = ReadBoolSetting(AUTO_HIDE_ICONS_VALUE, defaultValue: true);
 		private bool _isStageManagerEnabled;
 
 		public bool EnableWindowDropToScene = false;
@@ -481,6 +485,23 @@ namespace StageManager
 
 		public string StageManagerStatus => IsStageManagerEnabled ? "Stage Manager: On" : "Stage Manager: Off";
 
+		public bool AutoHideStageManagerIcons
+		{
+			get => _autoHideStageManagerIcons;
+			set
+			{
+				if (value == _autoHideStageManagerIcons)
+					return;
+
+				_autoHideStageManagerIcons = value;
+				WriteBoolSetting(AUTO_HIDE_ICONS_VALUE, value);
+				OnPropertyChanged(nameof(AutoHideStageManagerIcons));
+
+				if (!value)
+					Mode = WindowMode.OnScreen;
+			}
+		}
+
 		public WindowMode Mode
 		{
 			get => _mode;
@@ -598,6 +619,12 @@ namespace StageManager
 
 		private void UpdateModeByWindows(IEnumerable<IWindow> windows)
 		{
+			if (!AutoHideStageManagerIcons)
+			{
+				Dispatcher.Invoke(() => Mode = WindowMode.OnScreen);
+				return;
+			}
+
 			bool doesOverlap(IWindowLocation loc) => loc.State == Native.Window.WindowState.Maximized || (loc.State == Native.Window.WindowState.Normal && (loc.X * 2) < _lastWidth);
 
 			var anyOverlappingWindows = windows.Any(w => doesOverlap(w.Location));
@@ -618,7 +645,7 @@ namespace StageManager
 
 		private void NavigateToProjectPage()
 		{
-			Process.Start(new ProcessStartInfo("https://github.com/awaescher/StageManager")
+			Process.Start(new ProcessStartInfo("https://github.com/SERRNOVIK/StageManager")
 			{
 				UseShellExecute = true
 			});
@@ -628,6 +655,19 @@ namespace StageManager
 		{ 
 			get => AutoStart.IsStartup(APP_NAME);
 			set => AutoStart.SetStartup(APP_NAME, value);
+		}
+
+		private static bool ReadBoolSetting(string name, bool defaultValue)
+		{
+			using var key = Registry.CurrentUser.OpenSubKey(SETTINGS_REG_KEY);
+			var value = key?.GetValue(name)?.ToString();
+			return bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+		}
+
+		private static void WriteBoolSetting(string name, bool value)
+		{
+			using var key = Registry.CurrentUser.CreateSubKey(SETTINGS_REG_KEY, writable: true);
+			key?.SetValue(name, value.ToString());
 		}
 
 		private void MenuItem_ProjectPage_Click(object sender, RoutedEventArgs e)

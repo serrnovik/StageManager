@@ -588,6 +588,10 @@
                         IsCheckable="True"
                         IsChecked="{Binding StartsWithWindows}" />
                     <MenuItem
+                        Header="Auto-hide Stage Manager icons"
+                        IsCheckable="True"
+                        IsChecked="{Binding AutoHideStageManagerIcons, Mode=TwoWay}" />
+                    <MenuItem
                         Header="Project page"
                         Click="MenuItem_ProjectPage_Click" />
                     <Separator />
