@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish
+        shell: pwsh
+        run: .\publish.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: winget install --id JRSoftware.InnoSetup -e -s winget --accept-package-agreements --accept-source-agreements
+
+      - name: Build installer
+        shell: pwsh
+        run: iscc .\installer\StageManager.iss
+
+      - name: Zip portable build
+        shell: pwsh
+        run: Compress-Archive -Path .\publish\StageManager-win-x64\* -DestinationPath .\dist\StageManager-portable-win-x64.zip -Force
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: StageManager-windows
+          path: |
+            dist\StageManagerSetup.exe
+            dist\StageManager-portable-win-x64.zip
