@@ -71,6 +71,7 @@ namespace StageManager
 
 				CloseWindowPickers();
 				await SceneManager!.SwitchTo(sceneModel.Scene);
+				sceneModel.PrimaryDisplayWindow?.Focus();
 			});
 			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
 			ActivateWindowCommand = new ActionCommand(async model => await ActivateWindow((WindowModel)model));
@@ -272,9 +273,10 @@ namespace StageManager
 		}
 		private void SyncVisibilityByUpdatedTimeStamp()
 		{
+			var currentDesktopId = GetCurrentDesktopId();
 			var regularScenes = Scenes.Where(s => !s.IsOverflowGroup).ToArray();
 			foreach (var scene in regularScenes)
-				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle));
+				scene.UpdateDisplayWindows(w => IsWindowOnCurrentDesktop(w.Handle, currentDesktopId));
 
 			var currentDesktopScenes = regularScenes
 				.Where(s => s.DisplayWindows.Any())
@@ -334,11 +336,11 @@ namespace StageManager
 			}
 		}
 
-		private bool IsWindowOnCurrentDesktop(IntPtr handle)
+		private bool IsWindowOnCurrentDesktop(IntPtr handle, Guid? currentDesktopId)
 		{
 			try
 			{
-				return _virtualDesktopManager.IsWindowOnCurrentDesktop(handle);
+				return _virtualDesktopManager.IsWindowOnDesktop(handle, currentDesktopId);
 			}
 			catch (COMException)
 			{

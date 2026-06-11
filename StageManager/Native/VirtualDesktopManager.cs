@@ -76,8 +76,8 @@ namespace StageManager.Native
 			if (windowHandle == IntPtr.Zero)
 				return false;
 
-			if (Win32Helper.IsCloaked(windowHandle))
-				return false;
+			if (IsWindowOnCurrentDesktop(windowHandle))
+				return true;
 
 			if (desktopId is object && TryGetWindowDesktopId(windowHandle, out var windowDesktopId))
 				return windowDesktopId == desktopId.Value;

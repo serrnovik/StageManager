@@ -146,7 +146,8 @@ namespace StageManager
 
 		private Scene? FindSceneForProcess(string processName)
 		{
-			return _scenes?.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase) && s.Windows.Any(IsWindowOnCurrentDesktop));
+			var currentDesktopId = GetCurrentDesktopId();
+			return _scenes?.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase) && s.Windows.Any(w => IsWindowOnCurrentDesktop(w, currentDesktopId)));
 		}
 
 		private async void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
@@ -236,8 +237,9 @@ namespace StageManager
 			{
 				_suspend = true;
 
-				var sceneWindows = scene?.Windows.Where(IsWindowOnCurrentDesktop).ToArray() ?? Array.Empty<IWindow>();
-				var otherWindows = GetSceneableWindows().Except(sceneWindows).ToArray();
+				var currentDesktopId = GetCurrentDesktopId();
+				var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
+				var otherWindows = GetSceneableWindows(currentDesktopId).Except(sceneWindows).ToArray();
 
 				var prior = _current;
 				_current = scene;
@@ -340,7 +342,7 @@ namespace StageManager
 			return window is object
 				&& !string.IsNullOrEmpty(window.ProcessFileName)
 				&& !string.IsNullOrEmpty(window.Title)
-				&& IsWindowOnCurrentDesktop(window);
+				&& IsWindowOnCurrentDesktop(window, GetCurrentDesktopId());
 		}
 
 		private Guid? GetCurrentDesktopId()
@@ -364,11 +366,11 @@ namespace StageManager
 			return WindowsManager?.Windows?.Select(window => window.Handle).ToArray() ?? Enumerable.Empty<IntPtr>();
 		}
 
-		private bool IsWindowOnCurrentDesktop(IWindow window)
+		private bool IsWindowOnCurrentDesktop(IWindow window, Guid? currentDesktopId)
 		{
 			try
 			{
-				return _virtualDesktopManager.IsWindowOnCurrentDesktop(window.Handle);
+				return _virtualDesktopManager.IsWindowOnDesktop(window.Handle, currentDesktopId);
 			}
 			catch (COMException)
 			{
@@ -380,13 +382,15 @@ namespace StageManager
 			}
 		}
 
-		private IEnumerable<IWindow> GetSceneableWindows()
+		private IEnumerable<IWindow> GetSceneableWindows() => GetSceneableWindows(GetCurrentDesktopId());
+
+		private IEnumerable<IWindow> GetSceneableWindows(Guid? currentDesktopId)
 		{
 			return WindowsManager?.Windows?.Where(w =>
 				w is object
 				&& !string.IsNullOrEmpty(w.ProcessFileName)
 				&& !string.IsNullOrEmpty(w.Title)
-				&& IsWindowOnCurrentDesktop(w)) ?? Enumerable.Empty<IWindow>();
+				&& IsWindowOnCurrentDesktop(w, currentDesktopId)) ?? Enumerable.Empty<IWindow>();
 		}
 
 		public IEnumerable<Scene> GetScenes()
@@ -404,7 +408,8 @@ namespace StageManager
 
 		public IEnumerable<IWindow> GetCurrentWindows()
 		{
-			return _current?.Windows.Where(IsWindowOnCurrentDesktop) ?? GetSceneableWindows();
+			var currentDesktopId = GetCurrentDesktopId();
+			return _current?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)) ?? GetSceneableWindows(currentDesktopId);
 		}
 
 		private string GetWindowGroupKey(IWindow window) => window.ProcessName;

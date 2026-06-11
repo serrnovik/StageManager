@@ -29,12 +29,15 @@ namespace StageManager
 
 		public void Remove(IWindow window)
 		{
-			_windows.Remove(window);
+			_windows.RemoveAll(w => w.Handle == window.Handle);
 			UpdateTitle();
 		}
 
 		public void Add(IWindow window)
 		{
+			if (_windows.Any(w => w.Handle == window.Handle))
+				return;
+
 			_windows.Add(window);
 			UpdateTitle();
 		}

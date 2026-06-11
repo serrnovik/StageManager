@@ -77,39 +77,27 @@ namespace StageManager.Model
 
 			Scene = updatedScene;
 
-			var updatedWindows = updatedScene.Windows.ToArray();
-			for (int i = 0; i < updatedWindows.Length; i++)
+			var existingWindows = Windows
+				.GroupBy(w => w.Handle)
+				.ToDictionary(g => g.Key, g => g.First());
+			var updatedWindows = updatedScene.Windows
+				.GroupBy(w => w.Handle)
+				.Select(g => g.Last())
+				.ToArray();
+
+			Windows.Clear();
+			foreach (var updatedWindow in updatedWindows)
 			{
-				if (Windows.Count > i && Windows[i].Window.Handle == updatedWindows[i].Handle)
+				if (existingWindows.TryGetValue(updatedWindow.Handle, out var windowModel))
 				{
-					// same position - just update
-					Windows[i].Window = updatedWindows[i];
+					windowModel.Window = updatedWindow;
 				}
 				else
 				{
-					var windowToUpdate = Windows.FirstOrDefault(w => w.Window.Handle == updatedWindows[i].Handle);
-					if (windowToUpdate is object)
-					{
-						// has the window but other position -> update and move
-						windowToUpdate.Window = updatedWindows[i];
-						Windows.Move(Windows.IndexOf(windowToUpdate), i);
-					}
-					else
-					{
-						// no window tp update --> add/insert
-						Windows.Insert(i, new WindowModel(updatedWindows[i]));
-					}
+					windowModel = new WindowModel(updatedWindow);
 				}
-			}
 
-			// remove windows that have been gone
-			if (Windows.Count > updatedScene.Windows.Count())
-			{
-				for (int i = Windows.Count - 1; i >= 0; i--)
-				{
-					if (!updatedScene.Windows.Any(w => w.Handle == Windows[i].Window.Handle))
-						Windows.RemoveAt(i);
-				}
+				Windows.Add(windowModel);
 			}
 
 			Updated = DateTime.UtcNow;
