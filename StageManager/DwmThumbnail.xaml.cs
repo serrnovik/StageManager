@@ -27,7 +27,9 @@ namespace StageManager
 		private Window? _window;
 		private Point? _dpiScaleFactor;
 		private RECT? _lastThumbnailRect;
+		private RECT? _lastSourceRect;
 		private bool? _lastThumbnailVisible;
+		private const byte PreviewOpacity = 222;
 
 		public static readonly DependencyProperty PreviewHandleProperty = DependencyProperty.Register(nameof(PreviewHandle),
 			   typeof(IntPtr),
@@ -128,6 +130,7 @@ namespace StageManager
 			_registeredHostHandle = IntPtr.Zero;
 			_registeredPreviewHandle = IntPtr.Zero;
 			_lastThumbnailRect = null;
+			_lastSourceRect = null;
 			_lastThumbnailVisible = null;
 		}
 
@@ -161,11 +164,13 @@ namespace StageManager
 			}
 
 			var thumbnailRect = CreateDestinationRect(previewBounds, dpi);
+			var sourceRect = CreateSourceRect(thumbnailRect);
 
 			if (HasVisibleOwnedPopup())
 			{
 				UpdateThumbnailVisibility(false);
 				_lastThumbnailRect = null;
+				_lastSourceRect = null;
 				return;
 			}
 
@@ -174,21 +179,28 @@ namespace StageManager
 				&& last.top == thumbnailRect.top
 				&& last.left == thumbnailRect.left
 				&& last.bottom == thumbnailRect.bottom
-				&& last.right == thumbnailRect.right)
+				&& last.right == thumbnailRect.right
+				&& RectsEqual(_lastSourceRect, sourceRect))
 			{
 				return;
 			}
 
+			var flags = DWM_TNP.DWM_TNP_VISIBLE | DWM_TNP.DWM_TNP_OPACITY | DWM_TNP.DWM_TNP_RECTDESTINATION | DWM_TNP.DWM_TNP_SOURCECLIENTAREAONLY;
+			if (sourceRect is object)
+				flags |= DWM_TNP.DWM_TNP_RECTSOURCE;
+
 			var props = new DWM_THUMBNAIL_PROPERTIES
 			{
 				fVisible = true,
-				dwFlags = (int)(DWM_TNP.DWM_TNP_VISIBLE | DWM_TNP.DWM_TNP_OPACITY | DWM_TNP.DWM_TNP_RECTDESTINATION | DWM_TNP.DWM_TNP_SOURCECLIENTAREAONLY),
-				opacity = 255,
+				dwFlags = (int)flags,
+				opacity = PreviewOpacity,
 				rcDestination = thumbnailRect,
+				rcSource = sourceRect ?? new RECT(),
 				fSourceClientAreaOnly = true
 			};
 			NativeMethods.DwmUpdateThumbnailProperties(_dwmThumbnail, ref props);
 			_lastThumbnailRect = thumbnailRect;
+			_lastSourceRect = sourceRect;
 			_lastThumbnailVisible = true;
 		}
 
@@ -232,6 +244,53 @@ namespace StageManager
 				right = left + width,
 				bottom = top + height
 			};
+		}
+
+		private RECT? CreateSourceRect(RECT destinationRect)
+		{
+			var width = destinationRect.right - destinationRect.left;
+			var height = destinationRect.bottom - destinationRect.top;
+			if (width <= 0 || height <= 0)
+				return null;
+
+			if (NativeMethods.DwmQueryThumbnailSourceSize(_dwmThumbnail, out var sourceSize) != 0
+				|| sourceSize.cx <= 0
+				|| sourceSize.cy <= 0)
+			{
+				return null;
+			}
+
+			var destinationAspect = width / (double)height;
+			var sourceAspect = sourceSize.cx / (double)sourceSize.cy;
+			var sourceWidth = sourceSize.cx;
+			var sourceHeight = sourceSize.cy;
+
+			if (sourceAspect > destinationAspect)
+				sourceWidth = Math.Max(1, (int)Math.Round(sourceSize.cy * destinationAspect));
+			else if (sourceAspect < destinationAspect)
+				sourceHeight = Math.Max(1, (int)Math.Round(sourceSize.cx / destinationAspect));
+
+			var left = Math.Max(0, (sourceSize.cx - sourceWidth) / 2);
+			var top = Math.Max(0, (sourceSize.cy - sourceHeight) / 2);
+
+			return new RECT
+			{
+				left = left,
+				top = top,
+				right = left + sourceWidth,
+				bottom = top + sourceHeight
+			};
+		}
+
+		private static bool RectsEqual(RECT? first, RECT? second)
+		{
+			if (!first.HasValue || !second.HasValue)
+				return first.HasValue == second.HasValue;
+
+			return first.Value.top == second.Value.top
+				&& first.Value.left == second.Value.left
+				&& first.Value.bottom == second.Value.bottom
+				&& first.Value.right == second.Value.right;
 		}
 	}
 }

@@ -94,8 +94,8 @@
                                     <DataTemplate>
                                         <Grid
                                             x:Name="previewCard"
-                                            Width="154"
-                                            Height="87"
+                                            Width="164"
+                                            Height="97"
                                             ClipToBounds="True"
                                             Panel.ZIndex="1"
                                             RenderTransformOrigin="0.5,0.58">
@@ -109,10 +109,10 @@
                                                 x:Name="stackLayer3"
                                                 Width="154"
                                                 Height="87"
-                                                Margin="10,10,0,0"
+                                                Margin="0,0,0,0"
                                                 HorizontalAlignment="Left"
                                                 VerticalAlignment="Top"
-                                                Background="#E4FFFFFF"
+                                                Background="#CFFFFFFF"
                                                 BorderBrush="#AAFFFFFF"
                                                 BorderThickness="1"
                                                 Visibility="Collapsed" />
@@ -123,7 +123,7 @@
                                                 Margin="5,5,0,0"
                                                 HorizontalAlignment="Left"
                                                 VerticalAlignment="Top"
-                                                Background="#E9FFFFFF"
+                                                Background="#D8FFFFFF"
                                                 BorderBrush="#AAFFFFFF"
                                                 BorderThickness="1"
                                                 Visibility="Collapsed" />
@@ -132,11 +132,18 @@
                                                 PreviewHandle="{Binding Handle}"
                                                 Width="154"
                                                 Height="87"
-                                                Margin="0, 0, 0, 0" />
+                                                Margin="10,10,0,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top" />
                                             <Border
                                                 x:Name="iconPreview"
+                                                Width="154"
+                                                Height="87"
+                                                Margin="10,10,0,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
                                                 Visibility="Collapsed"
-                                                Background="#E8FFFFFF"
+                                                Background="#D8FFFFFF"
                                                 BorderBrush="#AAFFFFFF"
                                                 BorderThickness="1">
                                                 <Image
