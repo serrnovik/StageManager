@@ -45,6 +45,9 @@ namespace StageManager.Model
 		public void UpdateDisplayWindows(Func<WindowModel, bool> predicate)
 		{
 			var windows = Windows.ToArray();
+			foreach (var window in windows)
+				window.RefreshTransientState();
+
 			var displayWindows = windows.Where(predicate).ToArray();
 
 			for (int i = 0; i < displayWindows.Length; i++)

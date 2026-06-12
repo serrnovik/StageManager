@@ -88,12 +88,20 @@ namespace StageManager.Model
 				RaisePropertyChanged(nameof(Handle));
 				RaisePropertyChanged(nameof(Icon));
 				RaisePropertyChanged(nameof(IsMinimized));
+				RaisePropertyChanged(nameof(HasVisibleOwnedPopup));
 			}
 		}
 
 		public IntPtr Handle => _window?.Handle ?? IntPtr.Zero;
 
 		public bool IsMinimized => _window?.IsMinimized ?? false;
+		public bool HasVisibleOwnedPopup => _window?.HasVisibleOwnedPopup ?? false;
+
+		public void RefreshTransientState()
+		{
+			RaisePropertyChanged(nameof(IsMinimized));
+			RaisePropertyChanged(nameof(HasVisibleOwnedPopup));
+		}
 
 		public void Focus() => _window?.Focus();
 	}

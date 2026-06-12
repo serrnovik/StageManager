@@ -97,6 +97,7 @@
                                             Width="220"
                                             Height="124"
                                             ClipToBounds="True"
+                                            Panel.ZIndex="1"
                                             RenderTransformOrigin="0.5,0.58">
                                             <Grid.RenderTransform>
                                                 <ScaleTransform
@@ -162,6 +163,18 @@
                                             </EventTrigger>
                                             <DataTrigger
                                                 Binding="{Binding IsMinimized}"
+                                                Value="True">
+                                                <Setter
+                                                    TargetName="livePreview"
+                                                    Property="Visibility"
+                                                    Value="Collapsed" />
+                                                <Setter
+                                                    TargetName="iconPreview"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger
+                                                Binding="{Binding HasVisibleOwnedPopup}"
                                                 Value="True">
                                                 <Setter
                                                     TargetName="livePreview"
@@ -278,7 +291,9 @@
                             <StackPanel
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Center"
-                                Margin="0,4,0,24">
+                                MinHeight="44"
+                                Margin="0,12,0,30"
+                                Panel.ZIndex="5">
                                 <ItemsControl
                                     VerticalAlignment="Center"
                                     HorizontalAlignment="Center"
@@ -425,6 +440,7 @@
                                                         Width="220"
                                                         Height="132"
                                                         ClipToBounds="True"
+                                                        Panel.ZIndex="1"
                                                         RenderTransformOrigin="0.5,0.58">
                                                         <Grid.RenderTransform>
                                                             <ScaleTransform
@@ -536,6 +552,18 @@
                                                 </EventTrigger>
                                                 <DataTrigger
                                                     Binding="{Binding IsMinimized}"
+                                                    Value="True">
+                                                    <Setter
+                                                        TargetName="pickerLivePreview"
+                                                        Property="Visibility"
+                                                        Value="Collapsed" />
+                                                    <Setter
+                                                        TargetName="pickerIconPreview"
+                                                        Property="Visibility"
+                                                        Value="Visible" />
+                                                </DataTrigger>
+                                                <DataTrigger
+                                                    Binding="{Binding HasVisibleOwnedPopup}"
                                                     Value="True">
                                                     <Setter
                                                         TargetName="pickerLivePreview"

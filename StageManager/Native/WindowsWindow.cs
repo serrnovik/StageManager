@@ -176,8 +176,25 @@ namespace StageManager.Native
 					   Win32Helper.IsAppWindow(_handle) &&
 					   Win32Helper.IsAltTabWindow(_handle) &&
 					   !IsOwnedWindow &&
+					   !IsLikelyOverlayWindow() &&
 					   HasUsableWindowSize());
 			}
+		}
+
+		private bool IsLikelyOverlayWindow()
+		{
+			var style = Win32.GetWindowStyleLongPtr(_handle);
+			var exStyle = Win32.GetWindowExStyleLongPtr(_handle);
+
+			var isPopup = style.HasFlag(Win32.WS.WS_POPUP);
+			var hasNormalFrame = style.HasFlag(Win32.WS.WS_CAPTION)
+				|| style.HasFlag(Win32.WS.WS_THICKFRAME)
+				|| style.HasFlag(Win32.WS.WS_SYSMENU);
+			var advertisesAsApp = exStyle.HasFlag(Win32.WS_EX.WS_EX_APPWINDOW);
+			var isNoActivate = exStyle.HasFlag(Win32.WS_EX.WS_EX_NOACTIVATE);
+			var isToolWindow = exStyle.HasFlag(Win32.WS_EX.WS_EX_TOOLWINDOW);
+
+			return isPopup && !hasNormalFrame && (!advertisesAsApp || isNoActivate || isToolWindow);
 		}
 
 		private bool HasUsableWindowSize()

@@ -1,4 +1,5 @@
 using StageManager.Native.Interop;
+using StageManager.Native.PInvoke;
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -26,6 +27,7 @@ namespace StageManager
 		private Window? _window;
 		private Point? _dpiScaleFactor;
 		private RECT? _lastThumbnailRect;
+		private bool? _lastThumbnailVisible;
 
 		public static readonly DependencyProperty PreviewHandleProperty = DependencyProperty.Register(nameof(PreviewHandle),
 			   typeof(IntPtr),
@@ -126,6 +128,7 @@ namespace StageManager
 			_registeredHostHandle = IntPtr.Zero;
 			_registeredPreviewHandle = IntPtr.Zero;
 			_lastThumbnailRect = null;
+			_lastThumbnailVisible = null;
 		}
 
 		private Window? FindWindow() => _window ??= Window.GetWindow(this);
@@ -159,7 +162,15 @@ namespace StageManager
 
 			var thumbnailRect = CreateDestinationRect(previewBounds, dpi);
 
+			if (HasVisibleOwnedPopup())
+			{
+				UpdateThumbnailVisibility(false);
+				_lastThumbnailRect = null;
+				return;
+			}
+
 			if (_lastThumbnailRect is RECT last
+				&& _lastThumbnailVisible == true
 				&& last.top == thumbnailRect.top
 				&& last.left == thumbnailRect.left
 				&& last.bottom == thumbnailRect.bottom
@@ -178,6 +189,33 @@ namespace StageManager
 			};
 			NativeMethods.DwmUpdateThumbnailProperties(_dwmThumbnail, ref props);
 			_lastThumbnailRect = thumbnailRect;
+			_lastThumbnailVisible = true;
+		}
+
+		private bool HasVisibleOwnedPopup()
+		{
+			if (PreviewHandle == IntPtr.Zero)
+				return false;
+
+			var popup = Win32.GetLastActivePopup(PreviewHandle);
+			return popup != IntPtr.Zero
+				&& popup != PreviewHandle
+				&& Win32.IsWindowVisible(popup);
+		}
+
+		private void UpdateThumbnailVisibility(bool isVisible)
+		{
+			if (_lastThumbnailVisible == isVisible)
+				return;
+
+			var props = new DWM_THUMBNAIL_PROPERTIES
+			{
+				dwFlags = (int)DWM_TNP.DWM_TNP_VISIBLE,
+				fVisible = isVisible
+			};
+
+			NativeMethods.DwmUpdateThumbnailProperties(_dwmThumbnail, ref props);
+			_lastThumbnailVisible = isVisible;
 		}
 
 		private static RECT CreateDestinationRect(Rect bounds, Point dpi)
