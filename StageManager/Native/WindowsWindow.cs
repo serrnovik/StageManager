@@ -187,14 +187,17 @@ namespace StageManager.Native
 			var exStyle = Win32.GetWindowExStyleLongPtr(_handle);
 
 			var isPopup = style.HasFlag(Win32.WS.WS_POPUP);
+			var hasSystemMenu = style.HasFlag(Win32.WS.WS_SYSMENU);
 			var hasNormalFrame = style.HasFlag(Win32.WS.WS_CAPTION)
 				|| style.HasFlag(Win32.WS.WS_THICKFRAME)
-				|| style.HasFlag(Win32.WS.WS_SYSMENU);
+				|| hasSystemMenu;
 			var advertisesAsApp = exStyle.HasFlag(Win32.WS_EX.WS_EX_APPWINDOW);
 			var isNoActivate = exStyle.HasFlag(Win32.WS_EX.WS_EX_NOACTIVATE);
 			var isToolWindow = exStyle.HasFlag(Win32.WS_EX.WS_EX_TOOLWINDOW);
+			var isTopMost = exStyle.HasFlag(Win32.WS_EX.WS_EX_TOPMOST);
 
-			return isPopup && !hasNormalFrame && (!advertisesAsApp || isNoActivate || isToolWindow);
+			return (isPopup && !hasNormalFrame && (!advertisesAsApp || isNoActivate || isToolWindow))
+				|| (isTopMost && advertisesAsApp && !hasSystemMenu);
 		}
 
 		private bool HasUsableWindowSize()
