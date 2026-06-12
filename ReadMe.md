@@ -14,12 +14,13 @@ For the best day-to-day experience, use StageManager together with [PowerToys Fa
 
 ## Key Features
 
-- **Virtual Desktop Support**: Fully resolved window tracking and identification issues when using multiple virtual desktops.
-- **Window Grouping**: Added support for grouping windows by application/process.
-- **Modernized Codebase**: Upgraded to **.NET 10** and refactored the codebase to use modern C# language features.
-- **Tray Icon Integration**: Added a system tray icon to easily control, start, stop, and exit the application.
-- **Visual Polish & Micro-Animations**: Added smooth scale-up animations on hover, natural icon tilt offsets, and improved live DWM thumbnail selection.
-- **CI/CD & Installer**: Added an Inno Setup installer script (`installer/StageManager.iss`), a publication script (`publish.ps1`), and GitHub Actions release workflows for automated builds.
+- **Stage-style window switching**: Keep one focused window visible while the rest of your current workspace stays available as side previews.
+- **Live window previews**: Switch using DWM thumbnails with app icons, hover zoom, and grouped stack previews when several windows share a slot.
+- **App and window grouping**: Group related windows, open a group picker when needed, and select individual windows without bringing the whole group forward.
+- **Virtual desktop awareness**: Show windows from the current Windows virtual desktop and avoid mixing apps from other desktops into the stage.
+- **Tray controls**: Toggle StageManager on/off, hide or show the stage icons, open settings, visit the project page, start with Windows, or exit from the tray menu.
+- **Configurable shortcuts**: Configure global shortcuts for toggling StageManager and explicitly showing stage items when they are hidden.
+- **Windows installer builds**: Install from the generated Inno Setup installer published by GitHub Actions releases.
 
 ## Usage
 
