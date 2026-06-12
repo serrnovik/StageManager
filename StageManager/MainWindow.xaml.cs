@@ -96,8 +96,8 @@ namespace StageManager
 				}
 
 				CloseWindowPickers();
-				await SceneManager!.SwitchTo(sceneModel.Scene, sceneModel.PrimaryDisplayWindow?.Window);
-				sceneModel.PrimaryDisplayWindow?.Focus();
+				var activeWindow = await SceneManager!.SwitchTo(sceneModel.Scene, cycleSameScene: true);
+				activeWindow?.Focus();
 			});
 			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
 			ActivateAppIconCommand = new ActionCommand(async model => await ActivateAppIcon((WindowModel)model));

@@ -230,21 +230,21 @@ namespace StageManager
 			return false;
 		}
 
-		public async Task SwitchTo(Scene? scene, IWindow? selectedWindow = null)
+		public async Task<IWindow?> SwitchTo(Scene? scene, IWindow? selectedWindow = null, bool cycleSameScene = false)
 		{
 			if (!_enabled)
-				return;
+				return null;
 
 			var currentDesktopId = GetCurrentDesktopId();
 			var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
-			var activeSceneWindow = SelectSceneWindow(sceneWindows, selectedWindow);
 			var isSameScene = object.Equals(scene, _current);
+			var activeSceneWindow = SelectSceneWindow(sceneWindows, selectedWindow, isSameScene && cycleSameScene);
 
 			if (isSameScene && activeSceneWindow?.Handle == _currentWindowHandle)
-				return;
+				return activeSceneWindow;
 
 			if (!isSameScene && IsReentrancy(scene))
-				return;
+				return null;
 
 			try
 			{
@@ -281,6 +281,8 @@ namespace StageManager
 					_desktop.ShowIcons();
 				else
 					_desktop.HideIcons();
+
+				return activeSceneWindow;
 			}
 			finally
 			{
@@ -288,27 +290,36 @@ namespace StageManager
 			}
 		}
 
-		private IWindow? SelectSceneWindow(IReadOnlyCollection<IWindow> sceneWindows, IWindow? selectedWindow)
+		private IWindow? SelectSceneWindow(IReadOnlyCollection<IWindow> sceneWindows, IWindow? selectedWindow, bool cycleSameScene)
 		{
 			if (!sceneWindows.Any())
 				return null;
 
+			var orderedWindows = sceneWindows.ToArray();
+
+			if (cycleSameScene && orderedWindows.Length > 1)
+			{
+				var currentIndex = Array.FindIndex(orderedWindows, w => w.Handle == _currentWindowHandle);
+				if (currentIndex >= 0)
+					return orderedWindows[(currentIndex + 1) % orderedWindows.Length];
+			}
+
 			if (selectedWindow is object)
 			{
-				var selected = sceneWindows.FirstOrDefault(w => w.Handle == selectedWindow.Handle);
+				var selected = orderedWindows.FirstOrDefault(w => w.Handle == selectedWindow.Handle);
 				if (selected is object)
 					return selected;
 			}
 
 			if (_currentWindowHandle != IntPtr.Zero)
 			{
-				var current = sceneWindows.FirstOrDefault(w => w.Handle == _currentWindowHandle);
+				var current = orderedWindows.FirstOrDefault(w => w.Handle == _currentWindowHandle);
 				if (current is object)
 					return current;
 			}
 
-			var focused = sceneWindows.FirstOrDefault(w => w.IsFocused);
-			return focused ?? sceneWindows.FirstOrDefault();
+			var focused = orderedWindows.FirstOrDefault(w => w.IsFocused);
+			return focused ?? orderedWindows.FirstOrDefault();
 		}
 
 		public Task MoveWindow(Scene sourceScene, IWindow window, Scene targetScene)
