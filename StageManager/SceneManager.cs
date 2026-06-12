@@ -110,6 +110,13 @@ namespace StageManager
 			if (_suspend || !_enabled)
 				return;
 
+			var ownerScene = FindSceneForOwnerWindow(e);
+			if (ownerScene is object)
+			{
+				SwitchTo(ownerScene).SafeFireAndForget();
+				return;
+			}
+
 			if (!_desktop.HasDesktopView)
 				_desktop.TrySetDesktopView(e);
 
@@ -239,7 +246,10 @@ namespace StageManager
 
 				var currentDesktopId = GetCurrentDesktopId();
 				var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
-				var otherWindows = GetSceneableWindows(currentDesktopId).Except(sceneWindows).ToArray();
+				var otherWindows = GetSceneableWindows(currentDesktopId)
+					.Except(sceneWindows)
+					.Where(w => !w.HasVisibleOwnedPopup)
+					.ToArray();
 
 				var prior = _current;
 				_current = scene;
@@ -342,6 +352,7 @@ namespace StageManager
 			return window is object
 				&& !string.IsNullOrEmpty(window.ProcessFileName)
 				&& !string.IsNullOrEmpty(window.Title)
+				&& !window.IsOwnedWindow
 				&& IsWindowOnCurrentDesktop(window, GetCurrentDesktopId());
 		}
 
@@ -390,6 +401,7 @@ namespace StageManager
 				w is object
 				&& !string.IsNullOrEmpty(w.ProcessFileName)
 				&& !string.IsNullOrEmpty(w.Title)
+				&& !w.IsOwnedWindow
 				&& IsWindowOnCurrentDesktop(w, currentDesktopId)) ?? Enumerable.Empty<IWindow>();
 		}
 
@@ -413,5 +425,18 @@ namespace StageManager
 		}
 
 		private string GetWindowGroupKey(IWindow window) => window.ProcessName;
+
+		private Scene? FindSceneForOwnerWindow(IntPtr handle)
+		{
+			var ownerHandle = Win32.GetWindow(handle, Win32.GW.GW_OWNER);
+			if (ownerHandle != IntPtr.Zero && FindSceneForWindow(ownerHandle) is Scene ownerScene)
+				return ownerScene;
+
+			var rootOwnerHandle = Win32.GetAncestor(handle, Win32.GA.GA_ROOTOWNER);
+			if (rootOwnerHandle != IntPtr.Zero && rootOwnerHandle != handle)
+				return FindSceneForWindow(rootOwnerHandle);
+
+			return null;
+		}
 	}
 }

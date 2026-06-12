@@ -84,6 +84,8 @@ namespace StageManager.Native
 		}
 
 		public IntPtr Handle => _handle;
+		public IntPtr OwnerHandle => Win32.GetWindow(_handle, Win32.GW.GW_OWNER);
+		public IntPtr RootOwnerHandle => Win32.GetAncestor(_handle, Win32.GA.GA_ROOTOWNER);
 
 		public string Class
 		{
@@ -173,6 +175,7 @@ namespace StageManager.Native
 					(!Win32Helper.IsCloaked(_handle) /* https://devblogs.microsoft.com/oldnewthing/20200302-00/?p=103507 */ &&
 					   Win32Helper.IsAppWindow(_handle) &&
 					   Win32Helper.IsAltTabWindow(_handle) &&
+					   !IsOwnedWindow &&
 					   HasUsableWindowSize());
 			}
 		}
@@ -228,6 +231,15 @@ namespace StageManager.Native
 		public bool IsMinimized => Win32.IsIconic(_handle);
 		public bool IsMaximized => Win32.IsZoomed(_handle);
 		public bool IsMouseMoving { get; internal set; }
+		public bool IsOwnedWindow => OwnerHandle != IntPtr.Zero || (RootOwnerHandle != IntPtr.Zero && RootOwnerHandle != _handle);
+		public bool HasVisibleOwnedPopup
+		{
+			get
+			{
+				var popup = Win32.GetLastActivePopup(_handle);
+				return popup != IntPtr.Zero && popup != _handle && Win32.IsWindowVisible(popup);
+			}
+		}
 
 		public void Focus()
 		{

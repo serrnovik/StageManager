@@ -22,6 +22,8 @@ namespace StageManager.Native.Window
         event IWindowDelegate? WindowFocused;
 
         IntPtr Handle { get; }
+        IntPtr OwnerHandle { get; }
+        IntPtr RootOwnerHandle { get; }
         string Title { get; }
         string Class { get; }
         IWindowLocation Location { get; }
@@ -37,6 +39,8 @@ namespace StageManager.Native.Window
         bool IsMinimized { get; }
         bool IsMaximized { get; }
         bool IsMouseMoving { get; }
+        bool IsOwnedWindow { get; }
+        bool HasVisibleOwnedPopup { get; }
 
         void Focus();
         void Hide();
