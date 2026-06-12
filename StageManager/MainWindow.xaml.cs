@@ -34,8 +34,8 @@ namespace StageManager
 		private const int FALLBACK_VISIBLE_SCENES = 6;
 		private const int MAX_OVERFLOW_GROUPS = 4;
 		private const int OVERFLOW_TARGET_GROUP_SIZE = 3;
-		private const double SCENE_SLOT_HEIGHT = 184.0;
-		private const double BOTTOM_WORK_AREA_GUARD = 56.0;
+		private const double SCENE_SLOT_HEIGHT = 170.0;
+		private const double BOTTOM_WORK_AREA_GUARD = 24.0;
 		private const double STAGE_VERTICAL_PADDING = 12.0;
 		private const string APP_NAME = "StageManager";
 		private const string AUTO_HIDE_ICONS_VALUE = "AutoHideStageManagerIcons";
