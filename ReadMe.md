@@ -6,6 +6,12 @@ This fork introduces support for **multiple virtual workspaces (desktops)**, **a
 
 ![Stage Manager](media/StageManagerV0.1.png)
 
+## Recommended Companion Setup
+
+For the best day-to-day experience, use StageManager together with [PowerToys FancyZones](https://learn.microsoft.com/en-us/windows/powertoys/fancyzones). FancyZones keeps your main work area predictable while StageManager keeps the current app/window set easy to switch from the side.
+
+![Recommended FancyZones layout for StageManager](media/Fancy_zones_recomendation.png)
+
 ## Key Improvements & Fixes in this Fork
 
 - **Virtual Desktop Support**: Fully resolved window tracking and identification issues when using multiple virtual desktops.
