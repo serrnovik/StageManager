@@ -94,8 +94,8 @@
                                     <DataTemplate>
                                         <Grid
                                             x:Name="previewCard"
-                                            Width="220"
-                                            Height="124"
+                                            Width="154"
+                                            Height="87"
                                             ClipToBounds="True"
                                             Panel.ZIndex="1"
                                             RenderTransformOrigin="0.5,0.58">
@@ -108,8 +108,8 @@
                                             <local:DwmThumbnail
                                                 x:Name="livePreview"
                                                 PreviewHandle="{Binding Handle}"
-                                                Width="220"
-                                                Height="124"
+                                                Width="154"
+                                                Height="87"
                                                 Margin="0, 0, 0, 0" />
                                             <Border
                                                 x:Name="iconPreview"
@@ -191,8 +191,8 @@
                             </ContentControl>
                             <Border
                                 x:Name="overflowPreview"
-                                Width="220"
-                                Height="104"
+                                Width="154"
+                                Height="73"
                                 Visibility="Collapsed"
                                 ClipToBounds="True"
                                 Background="#E8FFFFFF"
@@ -210,7 +210,7 @@
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel
-                                                Width="172"
+                                                Width="120"
                                                 Orientation="Horizontal" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
@@ -301,7 +301,7 @@
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel
-                                                MaxWidth="188"
+                                                MaxWidth="132"
                                                 Orientation="Horizontal" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
@@ -427,7 +427,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Button
-                                                Width="228"
+                                                Width="162"
                                                 Margin="4"
                                                 Padding="4"
                                                 Background="Transparent"
@@ -437,8 +437,8 @@
                                                 <StackPanel>
                                                     <Grid
                                                         x:Name="pickerPreviewCard"
-                                                        Width="220"
-                                                        Height="132"
+                                                        Width="154"
+                                                        Height="92"
                                                         ClipToBounds="True"
                                                         Panel.ZIndex="1"
                                                         RenderTransformOrigin="0.5,0.58">
@@ -450,8 +450,8 @@
                                                         </Grid.RenderTransform>
                                                         <local:DwmThumbnail
                                                             x:Name="pickerLivePreview"
-                                                            Width="220"
-                                                            Height="132"
+                                                            Width="154"
+                                                            Height="92"
                                                             PreviewHandle="{Binding Handle}" />
                                                         <Border
                                                             x:Name="pickerIconPreview"
