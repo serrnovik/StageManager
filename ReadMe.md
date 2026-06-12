@@ -1,8 +1,8 @@
 # Stage Manager for Windows
 
-This project is a fork of the original, not updated for 3 years (as of 06/2026), [awaescher/StageManager](https://github.com/awaescher/StageManager) prototype, bringing the macOS [Stage Manager](https://support.apple.com/en-us/HT213315) experience to Windows.
+StageManager brings a macOS-style [Stage Manager](https://support.apple.com/en-us/HT213315) workflow to Windows. It keeps your active window in focus while showing live previews and app icons along the side so you can quickly switch between your current work contexts.
 
-This fork introduces support for **multiple virtual workspaces (desktops)**, **application window grouping**, and crucial bug fixes to make the application more stable, polished, and production-ready.
+This is an alpha build, but it is now usable for daily testing: it supports **multiple virtual workspaces (desktops)**, **application window grouping**, tray controls, global shortcuts, and automated Windows installer builds.
 
 ![Stage Manager](media/StageManagerV0.1.png)
 
@@ -12,7 +12,7 @@ For the best day-to-day experience, use StageManager together with [PowerToys Fa
 
 ![Recommended FancyZones layout for StageManager](media/Fancy_zones_recomendation.png)
 
-## Key Improvements & Fixes in this Fork
+## Key Features
 
 - **Virtual Desktop Support**: Fully resolved window tracking and identification issues when using multiple virtual desktops.
 - **Window Grouping**: Added support for grouping windows by application/process.
@@ -36,5 +36,7 @@ To quit, find the app's tray icon (Windows might move it into the overflow menu)
 
 
 ---
+
+This project is based on [awaescher/StageManager](https://github.com/awaescher/StageManager), the original Windows Stage Manager feasibility prototype.
 
 Stage Manager is using a few code files to handle window tracking from [workspacer](https://github.com/workspacer/workspacer), an amazing open source project by [Rick Button](https://github.com/rickbutton).
