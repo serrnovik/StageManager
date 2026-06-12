@@ -19,6 +19,7 @@ namespace StageManager
 		private bool _suspend = false;
 		private bool _enabled = true;
 		private Guid? _reentrancyLockSceneId;
+		private IntPtr _currentWindowHandle = IntPtr.Zero;
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 
 		public event EventHandler<SceneChangedEventArgs>? SceneChanged;
@@ -178,7 +179,7 @@ namespace StageManager
 				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Created));
 			}
 
-			await SwitchTo(scene);
+			await SwitchTo(scene, window);
 		}
 
 		private async Task SwitchToSceneByNewWindow(IWindow window)
@@ -197,7 +198,7 @@ namespace StageManager
 				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Updated));
 			}
 
-			await SwitchTo(scene).ConfigureAwait(true);
+			await SwitchTo(scene, window).ConfigureAwait(true);
 		}
 
 		/// <summary>
@@ -229,30 +230,35 @@ namespace StageManager
 			return false;
 		}
 
-		public async Task SwitchTo(Scene? scene)
+		public async Task SwitchTo(Scene? scene, IWindow? selectedWindow = null)
 		{
 			if (!_enabled)
 				return;
 
-			if (object.Equals(scene, _current))
+			var currentDesktopId = GetCurrentDesktopId();
+			var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
+			var activeSceneWindow = SelectSceneWindow(sceneWindows, selectedWindow);
+			var isSameScene = object.Equals(scene, _current);
+
+			if (isSameScene && activeSceneWindow?.Handle == _currentWindowHandle)
 				return;
 
-			if (IsReentrancy(scene))
+			if (!isSameScene && IsReentrancy(scene))
 				return;
 
 			try
 			{
 				_suspend = true;
 
-				var currentDesktopId = GetCurrentDesktopId();
-				var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
+				var visibleSceneWindows = activeSceneWindow is null ? Array.Empty<IWindow>() : new[] { activeSceneWindow };
 				var otherWindows = GetSceneableWindows(currentDesktopId)
-					.Except(sceneWindows)
+					.Except(visibleSceneWindows)
 					.Where(w => !w.HasVisibleOwnedPopup)
 					.ToArray();
 
 				var prior = _current;
 				_current = scene;
+				_currentWindowHandle = activeSceneWindow?.Handle ?? IntPtr.Zero;
 
 				if (_scenes is not null)
 				{
@@ -262,7 +268,7 @@ namespace StageManager
 
 				if (scene is object)
 				{
-					foreach (var w in sceneWindows)
+					foreach (var w in visibleSceneWindows)
 						WindowStrategy.Show(w);
 				}
 
@@ -280,6 +286,29 @@ namespace StageManager
 			{
 				_suspend = false;
 			}
+		}
+
+		private IWindow? SelectSceneWindow(IReadOnlyCollection<IWindow> sceneWindows, IWindow? selectedWindow)
+		{
+			if (!sceneWindows.Any())
+				return null;
+
+			if (selectedWindow is object)
+			{
+				var selected = sceneWindows.FirstOrDefault(w => w.Handle == selectedWindow.Handle);
+				if (selected is object)
+					return selected;
+			}
+
+			if (_currentWindowHandle != IntPtr.Zero)
+			{
+				var current = sceneWindows.FirstOrDefault(w => w.Handle == _currentWindowHandle);
+				if (current is object)
+					return current;
+			}
+
+			var focused = sceneWindows.FirstOrDefault(w => w.IsFocused);
+			return focused ?? sceneWindows.FirstOrDefault();
 		}
 
 		public Task MoveWindow(Scene sourceScene, IWindow window, Scene targetScene)

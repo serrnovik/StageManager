@@ -95,7 +95,7 @@ namespace StageManager
 				}
 
 				CloseWindowPickers();
-				await SceneManager!.SwitchTo(sceneModel.Scene);
+				await SceneManager!.SwitchTo(sceneModel.Scene, sceneModel.PrimaryDisplayWindow?.Window);
 				sceneModel.PrimaryDisplayWindow?.Focus();
 			});
 			ToggleSceneWindowPickerCommand = new ActionCommand(model => ToggleSceneWindowPicker((SceneModel)model));
@@ -795,7 +795,7 @@ namespace StageManager
 
 			var scene = SceneManager.FindSceneForWindow(window.Handle);
 			if (scene is object)
-				await SceneManager.SwitchTo(scene).ConfigureAwait(true);
+				await SceneManager.SwitchTo(scene, window.Window).ConfigureAwait(true);
 
 			window.Focus();
 		}
