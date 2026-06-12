@@ -96,6 +96,7 @@
                                             x:Name="previewCard"
                                             Width="220"
                                             Height="124"
+                                            ClipToBounds="True"
                                             RenderTransformOrigin="0.5,0.58">
                                             <Grid.RenderTransform>
                                                 <ScaleTransform
@@ -423,6 +424,7 @@
                                                         x:Name="pickerPreviewCard"
                                                         Width="220"
                                                         Height="132"
+                                                        ClipToBounds="True"
                                                         RenderTransformOrigin="0.5,0.58">
                                                         <Grid.RenderTransform>
                                                             <ScaleTransform

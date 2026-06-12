@@ -91,8 +91,8 @@ namespace StageManager
 
 		public static Rect BoundsRelativeTo(FrameworkElement element, Visual relativeTo)
 		{
-			return element.TransformToVisual(relativeTo)
-						  .TransformBounds(System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(element));
+			var topLeft = element.TransformToVisual(relativeTo).Transform(new Point(0, 0));
+			return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
 		}
 
 		private void StartCapture()
@@ -157,13 +157,7 @@ namespace StageManager
 				return;
 			}
 
-			var thumbnailRect = new RECT
-			{
-				top = (int)(previewBounds.Top * dpi.Y),
-				left = (int)(previewBounds.Left * dpi.X),
-				bottom = (int)((previewBounds.Bottom - Margin.Top - Margin.Bottom) * dpi.Y) + 1,
-				right = (int)((previewBounds.Right - Margin.Left - Margin.Right) * dpi.X) + 1
-			};
+			var thumbnailRect = CreateDestinationRect(previewBounds, dpi);
 
 			if (_lastThumbnailRect is RECT last
 				&& last.top == thumbnailRect.top
@@ -184,6 +178,22 @@ namespace StageManager
 			};
 			NativeMethods.DwmUpdateThumbnailProperties(_dwmThumbnail, ref props);
 			_lastThumbnailRect = thumbnailRect;
+		}
+
+		private static RECT CreateDestinationRect(Rect bounds, Point dpi)
+		{
+			var left = (int)Math.Round(bounds.Left * dpi.X);
+			var top = (int)Math.Round(bounds.Top * dpi.Y);
+			var width = Math.Max(0, (int)Math.Round(bounds.Width * dpi.X));
+			var height = Math.Max(0, (int)Math.Round(bounds.Height * dpi.Y));
+
+			return new RECT
+			{
+				left = left,
+				top = top,
+				right = left + width,
+				bottom = top + height
+			};
 		}
 	}
 }
