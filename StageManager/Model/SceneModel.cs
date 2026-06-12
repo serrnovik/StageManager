@@ -71,6 +71,7 @@ namespace StageManager.Model
 			RaisePropertyChanged(nameof(HasMultipleWindows));
 			RaisePropertyChanged(nameof(HasDisplayWindows));
 			RaisePropertyChanged(nameof(PrimaryDisplayWindow));
+			RaisePropertyChanged(nameof(StackDepth));
 		}
 
 		public void UpdateFromScene(Scene updatedScene)
@@ -122,6 +123,7 @@ namespace StageManager.Model
 			Updated = DateTime.UtcNow;
 			RaisePropertyChanged(nameof(Title));
 			RaisePropertyChanged(nameof(HasMultipleWindows));
+			RaisePropertyChanged(nameof(StackDepth));
 		}
 
 		private void Scene_SelectedChanged(object? sender, EventArgs e)
@@ -153,6 +155,8 @@ namespace StageManager.Model
 		public bool HasDisplayWindows => DisplayWindows.Count > 0;
 
 		public WindowModel? PrimaryDisplayWindow => DisplayWindows.FirstOrDefault();
+
+		public int StackDepth => Math.Min(3, Math.Max(1, DisplayWindows.Count));
 
 		public bool IsOverflowGroup => _isOverflowGroup;
 

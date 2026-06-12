@@ -51,7 +51,7 @@
             Name="scenesControl"
             HorizontalAlignment="Left"
             VerticalAlignment="Center"
-            Padding="12, 0, 0, 0"
+            Padding="12, 12, 0, 12"
             ItemsSource="{Binding Scenes}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -105,6 +105,28 @@
                                                     ScaleX="1"
                                                     ScaleY="1" />
                                             </Grid.RenderTransform>
+                                            <Border
+                                                x:Name="stackLayer3"
+                                                Width="154"
+                                                Height="87"
+                                                Margin="10,10,0,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Background="#E4FFFFFF"
+                                                BorderBrush="#AAFFFFFF"
+                                                BorderThickness="1"
+                                                Visibility="Collapsed" />
+                                            <Border
+                                                x:Name="stackLayer2"
+                                                Width="154"
+                                                Height="87"
+                                                Margin="5,5,0,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Background="#E9FFFFFF"
+                                                BorderBrush="#AAFFFFFF"
+                                                BorderThickness="1"
+                                                Visibility="Collapsed" />
                                             <local:DwmThumbnail
                                                 x:Name="livePreview"
                                                 PreviewHandle="{Binding Handle}"
@@ -162,18 +184,6 @@
                                                 </BeginStoryboard>
                                             </EventTrigger>
                                             <DataTrigger
-                                                Binding="{Binding IsMinimized}"
-                                                Value="True">
-                                                <Setter
-                                                    TargetName="livePreview"
-                                                    Property="Visibility"
-                                                    Value="Collapsed" />
-                                                <Setter
-                                                    TargetName="iconPreview"
-                                                    Property="Visibility"
-                                                    Value="Visible" />
-                                            </DataTrigger>
-                                            <DataTrigger
                                                 Binding="{Binding HasVisibleOwnedPopup}"
                                                 Value="True">
                                                 <Setter
@@ -185,108 +195,30 @@
                                                     Property="Visibility"
                                                     Value="Visible" />
                                             </DataTrigger>
+                                            <DataTrigger
+                                                Binding="{Binding DataContext.StackDepth, RelativeSource={RelativeSource AncestorType=ContentControl}}"
+                                                Value="2">
+                                                <Setter
+                                                    TargetName="stackLayer2"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger
+                                                Binding="{Binding DataContext.StackDepth, RelativeSource={RelativeSource AncestorType=ContentControl}}"
+                                                Value="3">
+                                                <Setter
+                                                    TargetName="stackLayer2"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                                <Setter
+                                                    TargetName="stackLayer3"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                            </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ContentControl.ContentTemplate>
                             </ContentControl>
-                            <Border
-                                x:Name="overflowPreview"
-                                Width="154"
-                                Height="73"
-                                Visibility="Collapsed"
-                                ClipToBounds="True"
-                                Background="#E8FFFFFF"
-                                BorderBrush="#AAFFFFFF"
-                                BorderThickness="1">
-                                <Border.Effect>
-                                    <DropShadowEffect
-                                        BlurRadius="20"
-                                        Opacity="0.45" />
-                                </Border.Effect>
-                                <ItemsControl
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    ItemsSource="{Binding DisplayWindows}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel
-                                                Width="120"
-                                                Orientation="Horizontal" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border
-                                                Margin="4">
-                                                <Border.Effect>
-                                                    <DropShadowEffect
-                                                        BlurRadius="10"
-                                                        Opacity="0.4" />
-                                                </Border.Effect>
-                                                <Button
-                                                    Width="28"
-                                                    Height="28"
-                                                    Padding="0"
-                                                    Background="Transparent"
-                                                    BorderBrush="Transparent"
-                                                    Command="{Binding ActivateAppIconCommand, Mode=OneTime, Source={x:Reference thisWindow}}"
-                                                    CommandParameter="{Binding .}">
-                                                    <Image
-                                                        x:Name="overflowIconImage"
-                                                        Width="24"
-                                                        Height="24"
-                                                        RenderTransformOrigin="0.5,0.5"
-                                                        Source="{Binding Icon}"
-                                                        Stretch="Uniform">
-                                                        <Image.RenderTransform>
-                                                            <ScaleTransform
-                                                                x:Name="overflowIconScale"
-                                                                ScaleX="1"
-                                                                ScaleY="1" />
-                                                        </Image.RenderTransform>
-                                                    </Image>
-                                                </Button>
-                                            </Border>
-                                            <DataTemplate.Triggers>
-                                                <EventTrigger
-                                                    RoutedEvent="MouseEnter">
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetName="overflowIconScale"
-                                                                Storyboard.TargetProperty="ScaleX"
-                                                                To="1.14"
-                                                                Duration="0:0:0.12" />
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetName="overflowIconScale"
-                                                                Storyboard.TargetProperty="ScaleY"
-                                                                To="1.14"
-                                                                Duration="0:0:0.12" />
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </EventTrigger>
-                                                <EventTrigger
-                                                    RoutedEvent="MouseLeave">
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetName="overflowIconScale"
-                                                                Storyboard.TargetProperty="ScaleX"
-                                                                To="1"
-                                                                Duration="0:0:0.14" />
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetName="overflowIconScale"
-                                                                Storyboard.TargetProperty="ScaleY"
-                                                                To="1"
-                                                                Duration="0:0:0.14" />
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </EventTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Border>
                             <!-- Icons -->
                             <StackPanel
                                 Orientation="Horizontal"
@@ -551,18 +483,6 @@
                                                     </BeginStoryboard>
                                                 </EventTrigger>
                                                 <DataTrigger
-                                                    Binding="{Binding IsMinimized}"
-                                                    Value="True">
-                                                    <Setter
-                                                        TargetName="pickerLivePreview"
-                                                        Property="Visibility"
-                                                        Value="Collapsed" />
-                                                    <Setter
-                                                        TargetName="pickerIconPreview"
-                                                        Property="Visibility"
-                                                        Value="Visible" />
-                                                </DataTrigger>
-                                                <DataTrigger
                                                     Binding="{Binding HasVisibleOwnedPopup}"
                                                     Value="True">
                                                     <Setter
@@ -581,20 +501,6 @@
                             </Border>
                         </Popup>
                     </Grid>
-                    <DataTemplate.Triggers>
-                        <DataTrigger
-                            Binding="{Binding IsOverflowGroup}"
-                            Value="True">
-                            <Setter
-                                TargetName="previewItems"
-                                Property="Visibility"
-                                Value="Collapsed" />
-                            <Setter
-                                TargetName="overflowPreview"
-                                Property="Visibility"
-                                Value="Visible" />
-                        </DataTrigger>
-                    </DataTemplate.Triggers>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

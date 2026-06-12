@@ -36,6 +36,7 @@ namespace StageManager
 		private const int OVERFLOW_TARGET_GROUP_SIZE = 3;
 		private const double SCENE_SLOT_HEIGHT = 184.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 36.0;
+		private const double STAGE_VERTICAL_PADDING = 12.0;
 		private const string APP_NAME = "StageManager";
 		private const string AUTO_HIDE_ICONS_VALUE = "AutoHideStageManagerIcons";
 		private const string TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE = "ToggleStageManagerShortcut";
@@ -348,7 +349,7 @@ namespace StageManager
 		{
 			var area = this.GetMonitorWorkSize();
 			var height = area.Height > 0 ? area.Height : SystemParameters.WorkArea.Height;
-			height = Math.Max(0, height - BOTTOM_WORK_AREA_GUARD);
+			height = Math.Max(0, height - BOTTOM_WORK_AREA_GUARD - (STAGE_VERTICAL_PADDING * 2));
 			var capacity = Math.Max(MIN_VISIBLE_SCENES, (int)Math.Floor(height / SCENE_SLOT_HEIGHT));
 
 			if (capacity == _visibleSceneCapacity)
