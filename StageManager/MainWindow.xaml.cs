@@ -475,15 +475,18 @@ namespace StageManager
 				return 0;
 
 			var maxGroupCount = Math.Max(1, Math.Min(MAX_OVERFLOW_GROUPS, capacity));
-			for (int groupCount = 1; groupCount <= maxGroupCount; groupCount++)
-			{
-				var visibleSceneCount = Math.Max(0, capacity - groupCount);
-				var hiddenSceneCount = sceneCount - visibleSceneCount;
-				if (hiddenSceneCount <= groupCount * OVERFLOW_TARGET_GROUP_SIZE)
-					return groupCount;
-			}
-
-			return maxGroupCount;
+			return Enumerable.Range(1, maxGroupCount)
+				.Select(groupCount =>
+				{
+					var visibleSceneCount = Math.Max(0, capacity - groupCount);
+					var hiddenSceneCount = sceneCount - visibleSceneCount;
+					var largestGroupSize = (int)Math.Ceiling((double)hiddenSceneCount / groupCount);
+					return new { GroupCount = groupCount, LargestGroupSize = largestGroupSize };
+				})
+				.OrderBy(candidate => candidate.LargestGroupSize)
+				.ThenBy(candidate => candidate.GroupCount)
+				.First()
+				.GroupCount;
 		}
 
 		private IReadOnlyList<IReadOnlyList<SceneModel>> BuildOverflowGroups(IReadOnlyList<SceneModel> hiddenScenes, int groupCount)
