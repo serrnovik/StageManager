@@ -21,6 +21,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace StageManager
 {
@@ -34,7 +35,7 @@ namespace StageManager
 		private const int FALLBACK_VISIBLE_SCENES = 6;
 		private const int MAX_OVERFLOW_GROUPS = 4;
 		private const int OVERFLOW_TARGET_GROUP_SIZE = 3;
-		private const double SCENE_SLOT_HEIGHT = 170.0;
+		private const double SCENE_SLOT_HEIGHT = 160.0;
 		private const double BOTTOM_WORK_AREA_GUARD = 24.0;
 		private const double STAGE_VERTICAL_PADDING = 12.0;
 		private const string APP_NAME = "StageManager";
@@ -65,6 +66,7 @@ namespace StageManager
 		private Point _mouse = new Point(0, 0);
 		private SceneModel? _removedCurrentScene;
 		private SceneModel? _mouseDownScene;
+		private bool _renderedOverflowRebalanceScheduled;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private ShortcutGesture _toggleStageManagerShortcut = ReadShortcutSetting(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, DefaultToggleStageManagerShortcut);
@@ -117,9 +119,37 @@ namespace StageManager
 			base.OnSourceInitialized(e);
 
 			_thisHandle = new WindowInteropHelper(this).Handle;
+			HideStageManagerFromSystemSwitchers();
 			_hwndSource = HwndSource.FromHwnd(_thisHandle);
 			_hwndSource?.AddHook(WndProc);
 			RegisterGlobalHotkeys();
+		}
+
+		private void HideStageManagerFromSystemSwitchers()
+		{
+			if (_thisHandle == IntPtr.Zero)
+				return;
+
+			var exStyle = Win32.GetWindowExStyleLongPtr(_thisHandle);
+			exStyle &= ~Win32.WS_EX.WS_EX_APPWINDOW;
+			exStyle |= Win32.WS_EX.WS_EX_TOOLWINDOW;
+			Win32.SetWindowStyleExLongPtr(_thisHandle, exStyle);
+			Win32.SetWindowPos(
+				_thisHandle,
+				IntPtr.Zero,
+				0,
+				0,
+				0,
+				0,
+				Win32.SetWindowPosFlags.IgnoreMove
+					| Win32.SetWindowPosFlags.IgnoreResize
+					| Win32.SetWindowPosFlags.IgnoreZOrder
+					| Win32.SetWindowPosFlags.DoNotActivate
+					| Win32.SetWindowPosFlags.FrameChanged);
+
+			var enabled = 1;
+			NativeMethods.DwmSetWindowAttribute(_thisHandle, DWMWINDOWATTRIBUTE.ExcludedFromPeek, ref enabled, Marshal.SizeOf<int>());
+			NativeMethods.DwmSetWindowAttribute(_thisHandle, DWMWINDOWATTRIBUTE.DisallowPeek, ref enabled, Marshal.SizeOf<int>());
 		}
 
 		protected override void OnClosed(EventArgs e)
@@ -310,8 +340,9 @@ namespace StageManager
 
 			return model;
 		}
-		private void SyncVisibilityByUpdatedTimeStamp()
+		private void SyncVisibilityByUpdatedTimeStamp(int? capacityOverride = null, bool scheduleRenderedRebalance = true)
 		{
+			var capacity = capacityOverride ?? _visibleSceneCapacity;
 			var currentDesktopId = GetCurrentDesktopId();
 			var regularScenes = Scenes.Where(s => !s.IsOverflowGroup).ToArray();
 			foreach (var scene in regularScenes)
@@ -325,7 +356,7 @@ namespace StageManager
 			foreach (var scene in regularScenes.Except(currentDesktopScenes))
 				scene.IsVisible = false;
 
-			if (currentDesktopScenes.Length <= _visibleSceneCapacity)
+			if (currentDesktopScenes.Length <= capacity)
 			{
 				foreach (var scene in currentDesktopScenes)
 					scene.IsVisible = true;
@@ -334,22 +365,30 @@ namespace StageManager
 				return;
 			}
 
-			var overflowGroupCount = CalculateOverflowGroupCount(currentDesktopScenes.Length, _visibleSceneCapacity);
-			var visibleSceneCount = Math.Max(0, _visibleSceneCapacity - overflowGroupCount);
+			var overflowGroupCount = CalculateOverflowGroupCount(currentDesktopScenes.Length, capacity);
+			var visibleSceneCount = Math.Max(0, capacity - overflowGroupCount);
 
-			for (int i = 0; i < currentDesktopScenes.Length; i++)
-				currentDesktopScenes[i].IsVisible = i < visibleSceneCount;
+			foreach (var scene in currentDesktopScenes)
+				scene.IsVisible = false;
 
+			var visibleScenes = currentDesktopScenes.Take(visibleSceneCount).ToList();
 			var hiddenScenes = currentDesktopScenes.Skip(visibleSceneCount).ToArray();
-			var overflowGroups = BuildOverflowGroups(hiddenScenes, overflowGroupCount);
+			var overflowGroups = RebalanceOverflowGroups(
+				visibleScenes,
+				BuildOverflowGroups(hiddenScenes, overflowGroupCount),
+				capacity);
+
+			foreach (var scene in visibleScenes)
+				scene.IsVisible = true;
+
 			SyncOverflowGroups(overflowGroups);
+			if (scheduleRenderedRebalance)
+				ScheduleRenderedOverflowRebalance();
 		}
 
 		private void UpdateVisibleSceneCapacity()
 		{
-			var area = this.GetMonitorWorkSize();
-			var height = area.Height > 0 ? area.Height : SystemParameters.WorkArea.Height;
-			height = Math.Max(0, height - BOTTOM_WORK_AREA_GUARD - (STAGE_VERTICAL_PADDING * 2));
+			var height = GetAvailableStageHeight();
 			var capacity = Math.Max(MIN_VISIBLE_SCENES, (int)Math.Floor(height / SCENE_SLOT_HEIGHT));
 
 			if (capacity == _visibleSceneCapacity)
@@ -357,6 +396,45 @@ namespace StageManager
 
 			_visibleSceneCapacity = capacity;
 			SyncVisibilityByUpdatedTimeStamp();
+		}
+
+		private double GetAvailableStageHeight()
+		{
+			var area = this.GetMonitorWorkSize();
+			var height = area.Height > 0 ? area.Height : SystemParameters.WorkArea.Height;
+			return Math.Max(0, height - BOTTOM_WORK_AREA_GUARD - (STAGE_VERTICAL_PADDING * 2));
+		}
+
+		private void ScheduleRenderedOverflowRebalance()
+		{
+			if (_renderedOverflowRebalanceScheduled || !_overflowScenes.Any(s => s.IsVisible))
+				return;
+
+			_renderedOverflowRebalanceScheduled = true;
+			Dispatcher.BeginInvoke(PromoteOverflowGroupsIfRenderedSpaceAllows, DispatcherPriority.ContextIdle);
+		}
+
+		private void PromoteOverflowGroupsIfRenderedSpaceAllows()
+		{
+			_renderedOverflowRebalanceScheduled = false;
+
+			var visibleOverflowCount = _overflowScenes.Count(s => s.IsVisible);
+			if (visibleOverflowCount == 0 || scenesControl.ActualHeight <= 0)
+				return;
+
+			var visibleRegularCount = Scenes.Count(s => !s.IsOverflowGroup && s.IsVisible);
+			var renderedSlotCount = visibleRegularCount + visibleOverflowCount;
+			if (renderedSlotCount <= 0)
+				return;
+
+			var averageRenderedSlotHeight = scenesControl.ActualHeight / renderedSlotCount;
+			var conservativeSlotHeight = Math.Max(100.0, Math.Min(SCENE_SLOT_HEIGHT, averageRenderedSlotHeight));
+			var renderedCapacity = Math.Max(MIN_VISIBLE_SCENES, (int)Math.Floor(GetAvailableStageHeight() / conservativeSlotHeight));
+
+			if (renderedCapacity <= renderedSlotCount || renderedCapacity <= _visibleSceneCapacity)
+				return;
+
+			SyncVisibilityByUpdatedTimeStamp(renderedCapacity, scheduleRenderedRebalance: false);
 		}
 
 		private Guid? GetCurrentDesktopId()
@@ -429,6 +507,47 @@ namespace StageManager
 				var size = baseSize + (i < extra ? 1 : 0);
 				groups.Add(orderedScenes.Skip(offset).Take(size).ToArray());
 				offset += size;
+			}
+
+			return groups;
+		}
+
+		private IReadOnlyList<IReadOnlyList<SceneModel>> RebalanceOverflowGroups(
+			IList<SceneModel> visibleScenes,
+			IReadOnlyList<IReadOnlyList<SceneModel>> overflowGroups,
+			int capacity)
+		{
+			var groups = overflowGroups
+				.Select(g => g.ToList())
+				.Where(g => g.Count > 0)
+				.ToList();
+
+			while (visibleScenes.Count + groups.Count < capacity)
+			{
+				var biggestGroup = groups
+					.Where(g => g.Count > 1)
+					.OrderByDescending(g => g.Count)
+					.ThenByDescending(g => g.Max(s => s.Updated))
+					.FirstOrDefault();
+
+				if (biggestGroup is null)
+				{
+					var singletonGroup = groups
+						.OrderByDescending(g => g.Max(s => s.Updated))
+						.FirstOrDefault();
+					if (singletonGroup is null)
+						break;
+
+					visibleScenes.Add(singletonGroup.First());
+					groups.Remove(singletonGroup);
+					continue;
+				}
+
+				var sceneToPromote = biggestGroup
+					.OrderByDescending(s => s.Updated)
+					.First();
+				biggestGroup.Remove(sceneToPromote);
+				visibleScenes.Add(sceneToPromote);
 			}
 
 			return groups;
