@@ -421,23 +421,24 @@ namespace StageManager
 				return;
 			}
 
-			var overflowGroupCount = CalculateOverflowGroupCount(currentDesktopScenes.Length, capacity);
-			var visibleSceneCount = Math.Max(0, capacity - overflowGroupCount);
-
 			foreach (var scene in currentDesktopScenes)
 				scene.IsVisible = false;
 
-			var visibleScenes = currentDesktopScenes.Take(visibleSceneCount).ToList();
-			var hiddenScenes = currentDesktopScenes.Skip(visibleSceneCount).ToArray();
-			var overflowGroups = RebalanceOverflowGroups(
-				visibleScenes,
-				BuildOverflowGroups(hiddenScenes, overflowGroupCount),
-				capacity);
+			var layoutPlan = StageLayoutPlanner.Plan(
+				currentDesktopScenes
+					.Select(scene => new StageLayoutItem<SceneModel>(
+						scene,
+						GetSceneGroupName(scene),
+						scene.Updated,
+						Math.Max(1, scene.DisplayWindows.Count)))
+					.ToArray(),
+				capacity,
+				MAX_OVERFLOW_GROUPS);
 
-			foreach (var scene in visibleScenes)
+			foreach (var scene in layoutPlan.VisibleItems)
 				scene.IsVisible = true;
 
-			SyncOverflowGroups(overflowGroups);
+			SyncOverflowGroups(layoutPlan.OverflowGroups);
 			if (scheduleRenderedRebalance)
 				ScheduleRenderedOverflowRebalance();
 		}
@@ -523,93 +524,6 @@ namespace StageManager
 			{
 				return true;
 			}
-		}
-
-		private int CalculateOverflowGroupCount(int sceneCount, int capacity)
-		{
-			if (sceneCount <= capacity)
-				return 0;
-
-			var maxGroupCount = Math.Max(1, Math.Min(MAX_OVERFLOW_GROUPS, capacity));
-			return Enumerable.Range(1, maxGroupCount)
-				.Select(groupCount =>
-				{
-					var visibleSceneCount = Math.Max(0, capacity - groupCount);
-					var hiddenSceneCount = sceneCount - visibleSceneCount;
-					var largestGroupSize = (int)Math.Ceiling((double)hiddenSceneCount / groupCount);
-					return new { GroupCount = groupCount, LargestGroupSize = largestGroupSize };
-				})
-				.OrderBy(candidate => candidate.LargestGroupSize)
-				.ThenBy(candidate => candidate.GroupCount)
-				.First()
-				.GroupCount;
-		}
-
-		private IReadOnlyList<IReadOnlyList<SceneModel>> BuildOverflowGroups(IReadOnlyList<SceneModel> hiddenScenes, int groupCount)
-		{
-			if (!hiddenScenes.Any() || groupCount <= 0)
-				return Array.Empty<IReadOnlyList<SceneModel>>();
-
-			groupCount = Math.Min(groupCount, hiddenScenes.Count);
-			var orderedScenes = hiddenScenes
-				.OrderBy(GetSceneGroupName, StringComparer.CurrentCultureIgnoreCase)
-				.ThenByDescending(s => s.Updated)
-				.ToArray();
-
-			var groups = new List<IReadOnlyList<SceneModel>>();
-			var baseSize = orderedScenes.Length / groupCount;
-			var extra = orderedScenes.Length % groupCount;
-			var offset = 0;
-
-			for (int i = 0; i < groupCount; i++)
-			{
-				var size = baseSize + (i < extra ? 1 : 0);
-				groups.Add(orderedScenes.Skip(offset).Take(size).ToArray());
-				offset += size;
-			}
-
-			return groups;
-		}
-
-		private IReadOnlyList<IReadOnlyList<SceneModel>> RebalanceOverflowGroups(
-			IList<SceneModel> visibleScenes,
-			IReadOnlyList<IReadOnlyList<SceneModel>> overflowGroups,
-			int capacity)
-		{
-			var groups = overflowGroups
-				.Select(g => g.ToList())
-				.Where(g => g.Count > 0)
-				.ToList();
-
-			while (visibleScenes.Count + groups.Count < capacity)
-			{
-				var biggestGroup = groups
-					.Where(g => g.Count > 1)
-					.OrderByDescending(g => g.Count)
-					.ThenByDescending(g => g.Max(s => s.Updated))
-					.FirstOrDefault();
-
-				if (biggestGroup is null)
-				{
-					var singletonGroup = groups
-						.OrderByDescending(g => g.Max(s => s.Updated))
-						.FirstOrDefault();
-					if (singletonGroup is null)
-						break;
-
-					visibleScenes.Add(singletonGroup.First());
-					groups.Remove(singletonGroup);
-					continue;
-				}
-
-				var sceneToPromote = biggestGroup
-					.OrderByDescending(s => s.Updated)
-					.First();
-				biggestGroup.Remove(sceneToPromote);
-				visibleScenes.Add(sceneToPromote);
-			}
-
-			return groups;
 		}
 
 		private void SyncOverflowGroups(IReadOnlyList<IReadOnlyList<SceneModel>> groupedScenes)

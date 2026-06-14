@@ -27,3 +27,6 @@ jobs:
 
       - name: Build
         run: dotnet build StageManager.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet run --project StageManager.Tests/StageManager.Tests.csproj --configuration Release --no-build
