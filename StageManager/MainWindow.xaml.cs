@@ -22,6 +22,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace StageManager
 {
@@ -67,6 +68,7 @@ namespace StageManager
 		private SceneModel? _removedCurrentScene;
 		private SceneModel? _mouseDownScene;
 		private bool _renderedOverflowRebalanceScheduled;
+		private int _panelLayoutRefreshVersion;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private ShortcutGesture _toggleStageManagerShortcut = ReadShortcutSetting(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, DefaultToggleStageManagerShortcut);
@@ -87,6 +89,9 @@ namespace StageManager
 			DataContext = this;
 
 			_overlapCheckTimer = new Timer(OverlapCheck, null, Timeout.Infinite, Timeout.Infinite);
+			SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+			SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+			SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
 
 			SwitchSceneCommand = new ActionCommand(async model =>
 			{
@@ -154,6 +159,9 @@ namespace StageManager
 
 		protected override void OnClosed(EventArgs e)
 		{
+			SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+			SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
+			SystemEvents.SessionSwitch -= SystemEvents_SessionSwitch;
 			UnregisterGlobalHotkeys();
 			_hwndSource?.RemoveHook(WndProc);
 			StopHook();
@@ -196,6 +204,7 @@ namespace StageManager
 			OnPropertyChanged(nameof(StageManagerStatus));
 			StartHook();
 			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+			RecalculatePanelLayout(forceVisibilitySync: true);
 			EnsureStageManagerOnCurrentDesktop();
 		}
 
@@ -223,11 +232,58 @@ namespace StageManager
 		protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
 		{
 			base.OnRenderSizeChanged(sizeInfo);
+			RecalculatePanelLayout(forceVisibilitySync: false);
+		}
+
+		private void SystemEvents_DisplaySettingsChanged(object? sender, EventArgs e)
+		{
+			SchedulePanelLayoutRefresh();
+		}
+
+		private void SystemEvents_UserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+		{
+			if (e.Category is UserPreferenceCategory.Desktop
+				or UserPreferenceCategory.General
+				or UserPreferenceCategory.Window)
+				SchedulePanelLayoutRefresh();
+		}
+
+		private void SystemEvents_SessionSwitch(object? sender, SessionSwitchEventArgs e)
+		{
+			if (e.Reason is SessionSwitchReason.RemoteConnect
+				or SessionSwitchReason.RemoteDisconnect
+				or SessionSwitchReason.ConsoleConnect
+				or SessionSwitchReason.ConsoleDisconnect
+				or SessionSwitchReason.SessionUnlock)
+				SchedulePanelLayoutRefresh();
+		}
+
+		private void SchedulePanelLayoutRefresh()
+		{
+			var version = Interlocked.Increment(ref _panelLayoutRefreshVersion);
+			Dispatcher.BeginInvoke(() => RefreshPanelLayoutAfterSystemChange(version), DispatcherPriority.Background);
+		}
+
+		private async void RefreshPanelLayoutAfterSystemChange(int version)
+		{
+			await Task.Delay(250).ConfigureAwait(true);
+			if (version != _panelLayoutRefreshVersion)
+				return;
+
+			RecalculatePanelLayout(forceVisibilitySync: true);
+
+			await Task.Delay(750).ConfigureAwait(true);
+			if (version == _panelLayoutRefreshVersion)
+				RecalculatePanelLayout(forceVisibilitySync: true);
+		}
+
+		private void RecalculatePanelLayout(bool forceVisibilitySync)
+		{
 			var area = this.GetMonitorWorkSize();
 			this.Left = 0;
 			this.Top = 0;
-			this.Height = area.Height;
-			UpdateVisibleSceneCapacity();
+			this.Height = area.Height > 0 ? area.Height : SystemParameters.WorkArea.Height;
+			UpdateVisibleSceneCapacity(forceVisibilitySync);
 		}
 
 		private void SceneManager_SceneChanged(object? sender, SceneChangedEventArgs e)
@@ -386,12 +442,12 @@ namespace StageManager
 				ScheduleRenderedOverflowRebalance();
 		}
 
-		private void UpdateVisibleSceneCapacity()
+		private void UpdateVisibleSceneCapacity(bool forceVisibilitySync = false)
 		{
 			var height = GetAvailableStageHeight();
 			var capacity = Math.Max(MIN_VISIBLE_SCENES, (int)Math.Floor(height / SCENE_SLOT_HEIGHT));
 
-			if (capacity == _visibleSceneCapacity)
+			if (capacity == _visibleSceneCapacity && !forceVisibilitySync)
 				return;
 
 			_visibleSceneCapacity = capacity;
