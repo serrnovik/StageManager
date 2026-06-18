@@ -150,12 +150,16 @@ namespace StageManager
 
 		public Scene? FindSceneForWindow(IWindow window) => FindSceneForWindow(window.Handle);
 
-		public Scene? FindSceneForWindow(IntPtr handle) => _scenes?.FirstOrDefault(s => s.Windows.Any(w => w.Handle == handle));
+		public Scene? FindSceneForWindow(IntPtr handle)
+		{
+			EnsureSceneIntegrity();
+			return _scenes?.FirstOrDefault(s => s.Windows.Any(w => w.Handle == handle));
+		}
 
 		private Scene? FindSceneForProcess(string processName)
 		{
-			var currentDesktopId = GetCurrentDesktopId();
-			return _scenes?.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase) && s.Windows.Any(w => IsWindowOnCurrentDesktop(w, currentDesktopId)));
+			ConsolidateDuplicateScenes();
+			return _scenes?.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase));
 		}
 
 		private async void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
@@ -236,7 +240,8 @@ namespace StageManager
 				return null;
 
 			var currentDesktopId = GetCurrentDesktopId();
-			var sceneWindows = scene?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
+			EnsureSceneIntegrity();
+			var sceneWindows = scene?.Windows.Where(w => IsLiveWindow(w) && IsWindowOnCurrentDesktop(w, currentDesktopId)).ToArray() ?? Array.Empty<IWindow>();
 			var isSameScene = object.Equals(scene, _current);
 			var activeSceneWindow = SelectSceneWindow(sceneWindows, selectedWindow, isSameScene && cycleSameScene);
 
@@ -390,6 +395,7 @@ namespace StageManager
 		private bool IsSceneableWindow(IWindow window)
 		{
 			return window is object
+				&& IsLiveWindow(window)
 				&& !string.IsNullOrEmpty(window.ProcessFileName)
 				&& !string.IsNullOrEmpty(window.Title)
 				&& !window.IsOwnedWindow
@@ -439,6 +445,7 @@ namespace StageManager
 		{
 			return WindowsManager?.Windows?.Where(w =>
 				w is object
+				&& IsLiveWindow(w)
 				&& !string.IsNullOrEmpty(w.ProcessFileName)
 				&& !string.IsNullOrEmpty(w.Title)
 				&& !w.IsOwnedWindow
@@ -455,16 +462,75 @@ namespace StageManager
 							.ToList();
 			}
 
+			PruneDeadWindows();
+			ConsolidateDuplicateScenes();
 			return _scenes;
 		}
 
 		public IEnumerable<IWindow> GetCurrentWindows()
 		{
 			var currentDesktopId = GetCurrentDesktopId();
-			return _current?.Windows.Where(w => IsWindowOnCurrentDesktop(w, currentDesktopId)) ?? GetSceneableWindows(currentDesktopId);
+			EnsureSceneIntegrity();
+			return _current?.Windows.Where(w => IsLiveWindow(w) && IsWindowOnCurrentDesktop(w, currentDesktopId)) ?? GetSceneableWindows(currentDesktopId);
 		}
 
 		private string GetWindowGroupKey(IWindow window) => window.ProcessName;
+
+		private void EnsureSceneIntegrity()
+		{
+			PruneDeadWindows();
+			ConsolidateDuplicateScenes();
+		}
+
+		private void PruneDeadWindows()
+		{
+			if (_scenes is null)
+				return;
+
+			foreach (var scene in _scenes.ToArray())
+			{
+				foreach (var window in scene.Windows.Where(w => !IsLiveWindow(w)).ToArray())
+				{
+					scene.Remove(window);
+					if (scene.Windows.Any())
+						SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Updated));
+					else
+					{
+						_scenes.Remove(scene);
+						SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Removed));
+					}
+				}
+			}
+		}
+
+		private void ConsolidateDuplicateScenes()
+		{
+			if (_scenes is null)
+				return;
+
+			foreach (var group in _scenes
+				.GroupBy(s => s.Key, StringComparer.OrdinalIgnoreCase)
+				.Where(g => g.Count() > 1)
+				.ToArray())
+			{
+				var keeper = group
+					.OrderByDescending(s => s.HasFocus)
+					.ThenByDescending(s => s.Windows.Count())
+					.First();
+
+				foreach (var duplicate in group.Where(s => !ReferenceEquals(s, keeper)).ToArray())
+				{
+					foreach (var window in duplicate.Windows.ToArray())
+						keeper.Add(window);
+
+					_scenes.Remove(duplicate);
+					SceneChanged?.Invoke(this, new SceneChangedEventArgs(duplicate, duplicate.Windows.FirstOrDefault() ?? keeper.Windows.First(), ChangeType.Removed));
+					SceneChanged?.Invoke(this, new SceneChangedEventArgs(keeper, keeper.Windows.First(), ChangeType.Updated));
+				}
+			}
+		}
+
+		private bool IsLiveWindow(IWindow window) => window.Handle != IntPtr.Zero && Win32.IsWindow(window.Handle);
 
 		private Scene? FindSceneForOwnerWindow(IntPtr handle)
 		{

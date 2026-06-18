@@ -9,7 +9,8 @@ var tests = new (string Name, Action Test)[]
 	("Overflow groups are balanced by icon weight", OverflowGroupsAreBalancedByIconWeight),
 	("Several small overflow groups beat one catch-all group", SeveralSmallGroupsBeatOneCatchAllGroup),
 	("Heavy hidden scenes are promoted over light visible scenes", HeavyHiddenScenesArePromoted),
-	("Smaller capacity creates bounded overflow groups", SmallerCapacityCreatesBoundedOverflowGroups)
+	("Smaller capacity creates bounded overflow groups", SmallerCapacityCreatesBoundedOverflowGroups),
+	("Same app overflow items stay together", SameAppOverflowItemsStayTogether)
 };
 
 foreach (var test in tests)
@@ -85,6 +86,27 @@ static void SmallerCapacityCreatesBoundedOverflowGroups()
 	AssertMaxGroupWeightAtMost(plan, weights, 3);
 }
 
+static void SameAppOverflowItemsStayTogether()
+{
+	var plan = StageLayoutPlanner.Plan(
+		new[]
+		{
+			ItemWithGroup("Recent A", "Recent A", 1, 0),
+			ItemWithGroup("Recent B", "Recent B", 1, 1),
+			ItemWithGroup("Logitech window 1", "Logitech", 1, 20),
+			ItemWithGroup("Logitech window 2", "Logitech", 1, 21),
+			ItemWithGroup("Chrome", "Chrome", 1, 22),
+			ItemWithGroup("Terminal", "Terminal", 1, 23)
+		},
+		capacity: 4,
+		maxOverflowGroups: 4);
+
+	var logitechGroups = plan.OverflowGroups
+		.Count(group => group.Any(item => item.StartsWith("Logitech", StringComparison.Ordinal)));
+
+	AssertEqual(1, logitechGroups, "Expected same-app overflow items to stay in one group.");
+}
+
 static StageLayoutItem<string>[] Items(params (string Name, int Weight)[] items)
 {
 	return items
@@ -106,9 +128,14 @@ static IReadOnlyDictionary<string, int> Weights(params (string Name, int Weight)
 
 static StageLayoutItem<string> Item(string name, int weight, int minutesAgo)
 {
+	return ItemWithGroup(name, name, weight, minutesAgo);
+}
+
+static StageLayoutItem<string> ItemWithGroup(string name, string groupName, int weight, int minutesAgo)
+{
 	return new StageLayoutItem<string>(
 		name,
-		name,
+		groupName,
 		DateTime.UtcNow.AddMinutes(-minutesAgo),
 		weight);
 }

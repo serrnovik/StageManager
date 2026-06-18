@@ -69,6 +69,7 @@ namespace StageManager
 		private SceneModel? _mouseDownScene;
 		private bool _renderedOverflowRebalanceScheduled;
 		private int _panelLayoutRefreshVersion;
+		private int _liveThumbnailResumeVersion;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private ShortcutGesture _toggleStageManagerShortcut = ReadShortcutSetting(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, DefaultToggleStageManagerShortcut);
@@ -76,6 +77,7 @@ namespace StageManager
 		private ShortcutGesture _revealStageManagerShortcut = ReadShortcutSetting(REVEAL_STAGE_MANAGER_SHORTCUT_VALUE, DefaultRevealStageManagerShortcut);
 		private bool _autoHideStageManagerIcons = AppSettings.ReadBool(AUTO_HIDE_ICONS_VALUE, defaultValue: true);
 		private bool _isStageManagerEnabled;
+		private bool _areLiveThumbnailsEnabled = true;
 		private DateTime _revealUntilUtc = DateTime.MinValue;
 		private SettingsWindow? _settingsWindow;
 
@@ -92,6 +94,7 @@ namespace StageManager
 			SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
 			SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
 			SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
+			SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
 
 			SwitchSceneCommand = new ActionCommand(async model =>
 			{
@@ -162,6 +165,7 @@ namespace StageManager
 			SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
 			SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
 			SystemEvents.SessionSwitch -= SystemEvents_SessionSwitch;
+			SystemEvents.PowerModeChanged -= SystemEvents_PowerModeChanged;
 			UnregisterGlobalHotkeys();
 			_hwndSource?.RemoveHook(WndProc);
 			StopHook();
@@ -256,6 +260,47 @@ namespace StageManager
 				or SessionSwitchReason.ConsoleDisconnect
 				or SessionSwitchReason.SessionUnlock)
 				SchedulePanelLayoutRefresh();
+		}
+
+		private void SystemEvents_PowerModeChanged(object? sender, PowerModeChangedEventArgs e)
+		{
+			switch (e.Mode)
+			{
+				case PowerModes.Suspend:
+					Dispatcher.BeginInvoke(() =>
+					{
+						CloseWindowPickers();
+						AreLiveThumbnailsEnabled = false;
+					}, DispatcherPriority.Send);
+					break;
+				case PowerModes.Resume:
+					ScheduleLiveThumbnailResume();
+					break;
+			}
+		}
+
+		private async void ScheduleLiveThumbnailResume()
+		{
+			var version = Interlocked.Increment(ref _liveThumbnailResumeVersion);
+			await Dispatcher.InvokeAsync(() =>
+			{
+				CloseWindowPickers();
+				AreLiveThumbnailsEnabled = false;
+			});
+
+			await Task.Delay(1500).ConfigureAwait(false);
+			if (version != _liveThumbnailResumeVersion)
+				return;
+
+			await Dispatcher.InvokeAsync(() =>
+			{
+				RecalculatePanelLayout(forceVisibilitySync: true);
+				AreLiveThumbnailsEnabled = true;
+			});
+
+			await Task.Delay(1000).ConfigureAwait(false);
+			if (version == _liveThumbnailResumeVersion)
+				await Dispatcher.InvokeAsync(() => RecalculatePanelLayout(forceVisibilitySync: true));
 		}
 
 		private void SchedulePanelLayoutRefresh()
@@ -625,6 +670,19 @@ namespace StageManager
 
 				if (!value)
 					Mode = WindowMode.OnScreen;
+			}
+		}
+
+		public bool AreLiveThumbnailsEnabled
+		{
+			get => _areLiveThumbnailsEnabled;
+			private set
+			{
+				if (value == _areLiveThumbnailsEnabled)
+					return;
+
+				_areLiveThumbnailsEnabled = value;
+				OnPropertyChanged(nameof(AreLiveThumbnailsEnabled));
 			}
 		}
 

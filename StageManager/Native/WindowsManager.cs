@@ -25,6 +25,7 @@ namespace StageManager.Native
 		private WindowsWindow? _mouseMoveWindow;
 		private readonly object _mouseMoveLock = new object();
 		private Win32.HookProc? _mouseHook;
+		private IntPtr _mouseHookHandle;
 
 		private Dictionary<WindowsWindow, bool> _floating;
 		private IntPtr _currentProcessWindowHandle;
@@ -106,7 +107,7 @@ namespace StageManager.Native
 				if (_mouseHook is not null)
 				{
 					var baseAddress = currentProcess.MainModule?.BaseAddress ?? IntPtr.Zero;
-					Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, _mouseHook, baseAddress, 0);
+					_mouseHookHandle = Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, _mouseHook, baseAddress, 0);
 				}
 				Application.Run();
 			});
@@ -125,6 +126,12 @@ namespace StageManager.Native
 				Win32.UnhookWinEvent(hook);
 
 			_winEventHooks.Clear();
+
+			if (_mouseHookHandle != IntPtr.Zero)
+			{
+				Win32.UnhookWindowsHookEx(_mouseHookHandle);
+				_mouseHookHandle = IntPtr.Zero;
+			}
 		}
 
 		private void RegisterWinEventHook(Win32.EVENT_CONSTANTS eventMin, Win32.EVENT_CONSTANTS eventMax)

@@ -130,6 +130,7 @@
                                             <local:DwmThumbnail
                                                 x:Name="livePreview"
                                                 PreviewHandle="{Binding Handle}"
+                                                Visibility="{Binding DataContext.AreLiveThumbnailsEnabled, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"
                                                 Width="154"
                                                 Height="87"
                                                 Margin="10,10,0,0"
@@ -190,6 +191,14 @@
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </EventTrigger>
+                                            <DataTrigger
+                                                Binding="{Binding DataContext.AreLiveThumbnailsEnabled, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Value="False">
+                                                <Setter
+                                                    TargetName="iconPreview"
+                                                    Property="Visibility"
+                                                    Value="Visible" />
+                                            </DataTrigger>
                                             <DataTrigger
                                                 Binding="{Binding HasVisibleOwnedPopup}"
                                                 Value="True">
@@ -391,6 +400,7 @@
                                                             x:Name="pickerLivePreview"
                                                             Width="154"
                                                             Height="92"
+                                                            Visibility="{Binding DataContext.AreLiveThumbnailsEnabled, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"
                                                             PreviewHandle="{Binding Handle}" />
                                                         <Border
                                                             x:Name="pickerIconPreview"
@@ -489,6 +499,14 @@
                                                         </Storyboard>
                                                     </BeginStoryboard>
                                                 </EventTrigger>
+                                                <DataTrigger
+                                                    Binding="{Binding DataContext.AreLiveThumbnailsEnabled, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Value="False">
+                                                    <Setter
+                                                        TargetName="pickerIconPreview"
+                                                        Property="Visibility"
+                                                        Value="Visible" />
+                                                </DataTrigger>
                                                 <DataTrigger
                                                     Binding="{Binding HasVisibleOwnedPopup}"
                                                     Value="True">

@@ -104,16 +104,27 @@ namespace StageManager
 				.Select(_ => new List<StageLayoutItem<T>>())
 				.ToArray();
 
-			foreach (var item in hiddenItems
-				.OrderByDescending(i => i.Weight)
-				.ThenBy(i => i.GroupName, StringComparer.CurrentCultureIgnoreCase)
-				.ThenByDescending(i => i.Updated))
+			foreach (var itemGroup in hiddenItems
+				.GroupBy(i => i.GroupName, StringComparer.CurrentCultureIgnoreCase)
+				.Select(g => new
+				{
+					Weight = g.Sum(i => i.Weight),
+					GroupName = g.Key,
+					Updated = g.Max(i => i.Updated),
+					Items = g
+						.OrderBy(i => i.GroupName, StringComparer.CurrentCultureIgnoreCase)
+						.ThenByDescending(i => i.Updated)
+						.ToArray()
+				})
+				.OrderByDescending(g => g.Weight)
+				.ThenBy(g => g.GroupName, StringComparer.CurrentCultureIgnoreCase)
+				.ThenByDescending(g => g.Updated))
 			{
 				var targetGroup = groups
 					.OrderBy(g => g.Sum(i => i.Weight))
 					.ThenBy(g => g.Count)
 					.First();
-				targetGroup.Add(item);
+				targetGroup.AddRange(itemGroup.Items);
 			}
 
 			return groups
