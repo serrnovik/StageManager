@@ -49,6 +49,7 @@ namespace StageManager.Model
 				window.RefreshTransientState();
 
 			var displayWindows = windows.Where(predicate).ToArray();
+			var changed = false;
 
 			for (int i = 0; i < displayWindows.Length; i++)
 			{
@@ -57,21 +58,33 @@ namespace StageManager.Model
 
 				var windowToMove = DisplayWindows.FirstOrDefault(w => w.Handle == displayWindows[i].Handle);
 				if (windowToMove is object)
+				{
 					DisplayWindows.Move(DisplayWindows.IndexOf(windowToMove), i);
+				}
 				else
+				{
 					DisplayWindows.Insert(i, displayWindows[i]);
+				}
+
+				changed = true;
 			}
 
 			for (int i = DisplayWindows.Count - 1; i >= 0; i--)
 			{
 				if (!displayWindows.Any(w => w.Handle == DisplayWindows[i].Handle))
+				{
 					DisplayWindows.RemoveAt(i);
+					changed = true;
+				}
 			}
 
-			RaisePropertyChanged(nameof(HasMultipleWindows));
-			RaisePropertyChanged(nameof(HasDisplayWindows));
-			RaisePropertyChanged(nameof(PrimaryDisplayWindow));
-			RaisePropertyChanged(nameof(StackDepth));
+			if (changed)
+			{
+				RaisePropertyChanged(nameof(HasMultipleWindows));
+				RaisePropertyChanged(nameof(HasDisplayWindows));
+				RaisePropertyChanged(nameof(PrimaryDisplayWindow));
+				RaisePropertyChanged(nameof(StackDepth));
+			}
 		}
 
 		public void UpdateFromScene(Scene updatedScene)
@@ -114,16 +127,40 @@ namespace StageManager.Model
 			if (!IsOverflowGroup)
 				throw new NotSupportedException();
 
-			Windows.Clear();
-			foreach (var window in scenes.SelectMany(s => s.DisplayWindows))
-				Windows.Add(window);
+			var windows = scenes.SelectMany(s => s.DisplayWindows).ToArray();
+			var changed = !HasSameWindows(windows);
+			if (changed)
+			{
+				Windows.Clear();
+				foreach (var window in windows)
+					Windows.Add(window);
+			}
 
+			changed |= _overflowTitle != title;
 			_overflowTitle = title;
 			UpdateDisplayWindows(_ => true);
-			Updated = DateTime.UtcNow;
-			RaisePropertyChanged(nameof(Title));
-			RaisePropertyChanged(nameof(HasMultipleWindows));
-			RaisePropertyChanged(nameof(StackDepth));
+			if (changed)
+			{
+				Updated = DateTime.UtcNow;
+				RaisePropertyChanged(nameof(Title));
+				RaisePropertyChanged(nameof(HasMultipleWindows));
+				RaisePropertyChanged(nameof(StackDepth));
+			}
+		}
+
+		public bool HasSameWindows(IEnumerable<WindowModel> windows)
+		{
+			var handles = windows.Select(w => w.Handle).ToArray();
+			if (Windows.Count != handles.Length)
+				return false;
+
+			for (var i = 0; i < handles.Length; i++)
+			{
+				if (Windows[i].Handle != handles[i])
+					return false;
+			}
+
+			return true;
 		}
 
 		private void Scene_SelectedChanged(object? sender, EventArgs e)

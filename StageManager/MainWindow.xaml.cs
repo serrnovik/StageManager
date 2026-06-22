@@ -70,6 +70,7 @@ namespace StageManager
 		private bool _renderedOverflowRebalanceScheduled;
 		private int _panelLayoutRefreshVersion;
 		private int _liveThumbnailResumeVersion;
+		private DateTime _lastSceneIntegrityRefreshUtc = DateTime.MinValue;
 		private readonly List<SceneModel> _overflowScenes = new List<SceneModel>();
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 		private ShortcutGesture _toggleStageManagerShortcut = ReadShortcutSetting(TOGGLE_STAGE_MANAGER_SHORTCUT_VALUE, DefaultToggleStageManagerShortcut);
@@ -781,7 +782,56 @@ namespace StageManager
 			EnsureStageManagerOnCurrentDesktop();
 
 			var currentWindows = SceneManager.GetCurrentWindows().ToArray(); // in case the enumeration changes
+			ScheduleSceneIntegrityRefresh();
 			UpdateModeByWindows(currentWindows);
+		}
+
+		private void ScheduleSceneIntegrityRefresh()
+		{
+			var now = DateTime.UtcNow;
+			if (now - _lastSceneIntegrityRefreshUtc < TimeSpan.FromSeconds(1))
+				return;
+
+			_lastSceneIntegrityRefreshUtc = now;
+			Dispatcher.BeginInvoke(RefreshSceneModelsFromManager, DispatcherPriority.Background);
+		}
+
+		private void RefreshSceneModelsFromManager()
+		{
+			if (SceneManager is null)
+				return;
+
+			var managerScenes = SceneManager.GetScenes().ToArray();
+			var managerIds = managerScenes.Select(scene => scene.Id).ToHashSet();
+
+			foreach (var scene in managerScenes)
+			{
+				var model = Scenes.FirstOrDefault(s => !s.IsOverflowGroup && s.Id == scene.Id);
+				if (model is null)
+					Scenes.Add(SceneModel.FromScene(scene));
+				else if (!HasSameWindowHandles(model, scene))
+					model.UpdateFromScene(scene);
+			}
+
+			foreach (var stale in Scenes.Where(s => !s.IsOverflowGroup && !managerIds.Contains(s.Id)).ToArray())
+				Scenes.Remove(stale);
+
+			SyncVisibilityByUpdatedTimeStamp();
+		}
+
+		private static bool HasSameWindowHandles(SceneModel model, Scene scene)
+		{
+			var handles = scene.Windows.Select(window => window.Handle).ToArray();
+			if (model.Windows.Count != handles.Length)
+				return false;
+
+			for (var i = 0; i < handles.Length; i++)
+			{
+				if (model.Windows[i].Handle != handles[i])
+					return false;
+			}
+
+			return true;
 		}
 
 		private void WindowsManager_DesktopChanged(object? sender, EventArgs e)
@@ -912,7 +962,7 @@ namespace StageManager
 
 			if (enabled)
 			{
-				Show();
+				ShowStageManagerWindow();
 				EnsureStageManagerOnCurrentDesktop();
 				await SceneManager.Enable().ConfigureAwait(true);
 				StartHook();
@@ -1075,10 +1125,18 @@ namespace StageManager
 			if (!IsStageManagerEnabled)
 				IsStageManagerEnabled = true;
 
-			Show();
+			ShowStageManagerWindow();
 			EnsureStageManagerOnCurrentDesktop();
 			Mode = WindowMode.Flyover;
 			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+		}
+
+		private void ShowStageManagerWindow()
+		{
+			if (WindowState == System.Windows.WindowState.Maximized)
+				WindowState = System.Windows.WindowState.Normal;
+
+			Show();
 		}
 
 		private void EnsureStageManagerOnCurrentDesktop()
