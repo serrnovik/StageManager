@@ -83,7 +83,7 @@ namespace StageManager.Native
 			_currentProcessId = currentProcess.Id;
 			_currentProcessWindowHandle = currentProcess.MainWindowHandle;
 
-			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_OBJECT_DESTROY, Win32.EVENT_CONSTANTS.EVENT_OBJECT_SHOW);
+			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_OBJECT_DESTROY, Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE);
 			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED, Win32.EVENT_CONSTANTS.EVENT_OBJECT_UNCLOAKED);
 			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZEEND);
 			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MOVESIZESTART, Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MOVESIZEEND);
@@ -192,6 +192,12 @@ namespace StageManager.Native
 
 			if (EventWindowIsValid(idChild, idObject, hwnd))
 			{
+				if (GetWindowUpdateType(eventType) is WindowUpdateType updateType)
+				{
+					UpdateWindow(hwnd, updateType);
+					return;
+				}
+
 				switch (eventType)
 				{
 					case Win32.EVENT_CONSTANTS.EVENT_OBJECT_SHOW:
@@ -199,21 +205,6 @@ namespace StageManager.Native
 						break;
 					case Win32.EVENT_CONSTANTS.EVENT_OBJECT_DESTROY:
 						UnregisterWindow(hwnd);
-						break;
-					case Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED:
-						UpdateWindow(hwnd, WindowUpdateType.Hide);
-						break;
-					case Win32.EVENT_CONSTANTS.EVENT_OBJECT_UNCLOAKED:
-						UpdateWindow(hwnd, WindowUpdateType.Show);
-						break;
-					case Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZESTART:
-						UpdateWindow(hwnd, WindowUpdateType.MinimizeStart);
-						break;
-					case Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZEEND:
-						UpdateWindow(hwnd, WindowUpdateType.MinimizeEnd);
-						break;
-					case Win32.EVENT_CONSTANTS.EVENT_SYSTEM_FOREGROUND:
-						UpdateWindow(hwnd, WindowUpdateType.Foreground);
 						break;
 					case Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MOVESIZESTART:
 						StartWindowMove(hwnd);
@@ -227,6 +218,16 @@ namespace StageManager.Native
 				}
 			}
 		}
+
+		internal static WindowUpdateType? GetWindowUpdateType(Win32.EVENT_CONSTANTS eventType) => eventType switch
+		{
+			Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE or Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED => WindowUpdateType.Hide,
+			Win32.EVENT_CONSTANTS.EVENT_OBJECT_UNCLOAKED => WindowUpdateType.Show,
+			Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZESTART => WindowUpdateType.MinimizeStart,
+			Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZEEND => WindowUpdateType.MinimizeEnd,
+			Win32.EVENT_CONSTANTS.EVENT_SYSTEM_FOREGROUND => WindowUpdateType.Foreground,
+			_ => null
+		};
 
 		private bool EventWindowIsValid(int idChild, Win32.OBJID idObject, IntPtr hwnd)
 		{

@@ -25,7 +25,12 @@ Name: "autostart"; Description: "Start StageManager with Windows"; GroupDescript
 
 [Icons]
 Name: "{group}\StageManager"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autostartup}\StageManager"; Filename: "{app}\{#MyAppExeName}"; Tasks: autostart
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "StageManager"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
+
+[InstallDelete]
+Type: files; Name: "{userstartup}\StageManager.lnk"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch StageManager"; Flags: nowait postinstall skipifsilent

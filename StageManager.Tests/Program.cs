@@ -1,7 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using StageManager;
+using StageManager.Native;
+using StageManager.Native.PInvoke;
+using StageManager.Native.Window;
+using Microsoft.Win32;
 
 var tests = new (string Name, Action Test)[]
 {
@@ -10,7 +15,11 @@ var tests = new (string Name, Action Test)[]
 	("Several small overflow groups beat one catch-all group", SeveralSmallGroupsBeatOneCatchAllGroup),
 	("Heavy hidden scenes are promoted over light visible scenes", HeavyHiddenScenesArePromoted),
 	("Smaller capacity creates bounded overflow groups", SmallerCapacityCreatesBoundedOverflowGroups),
-	("Same app overflow items stay together", SameAppOverflowItemsStayTogether)
+	("Same app overflow items stay together", SameAppOverflowItemsStayTogether),
+	("Legacy startup shortcut counts as startup", LegacyStartupShortcutCountsAsStartup),
+	("Disabling startup removes registry value and legacy shortcut", DisablingStartupRemovesAllRegistrations),
+	("Text input shell processes are ignored", TextInputShellProcessesAreIgnored),
+	("Hide events map to a hide update", HideEventsMapToHideUpdate)
 };
 
 foreach (var test in tests)
@@ -105,6 +114,51 @@ static void SameAppOverflowItemsStayTogether()
 		.Count(group => group.Any(item => item.StartsWith("Logitech", StringComparison.Ordinal)));
 
 	AssertEqual(1, logitechGroups, "Expected same-app overflow items to stay in one group.");
+}
+
+static void LegacyStartupShortcutCountsAsStartup()
+{
+	AssertTrue(
+		AutoStart.HasStartupRegistration(null, "StageManager", "\"C:\\StageManager.exe\"", hasLegacyStartupShortcut: true),
+		"Expected a legacy Startup-folder shortcut to count as enabled startup.");
+}
+
+static void DisablingStartupRemovesAllRegistrations()
+{
+	var testKeyName = $"Software\\StageManager.Tests\\{Guid.NewGuid():N}";
+	var shortcutPath = Path.GetTempFileName();
+	const string appName = "StageManager";
+	const string appPath = "\"C:\\StageManager.exe\"";
+
+	try
+	{
+		using var key = Registry.CurrentUser.CreateSubKey(testKeyName, writable: true);
+		key.SetValue(appName, appPath);
+		AutoStart.SetStartupRegistration(key, appName, startup: false, appPath, shortcutPath);
+
+		AssertEqual(null, key.GetValue(appName), "Expected the Registry startup value to be removed.");
+		AssertTrue(!File.Exists(shortcutPath), "Expected the legacy Startup-folder shortcut to be removed.");
+	}
+	finally
+	{
+		Registry.CurrentUser.DeleteSubKeyTree(testKeyName, throwOnMissingSubKey: false);
+		if (File.Exists(shortcutPath))
+			File.Delete(shortcutPath);
+	}
+}
+
+static void TextInputShellProcessesAreIgnored()
+{
+	AssertTrue(WindowsWindow.IsIgnoredProcess("TextInputHost"), "Expected Windows 11 text-input panels to be ignored.");
+	AssertTrue(WindowsWindow.IsIgnoredProcess("InputApp"), "Expected Windows 10 input panels to be ignored.");
+	AssertTrue(!WindowsWindow.IsIgnoredProcess("notepad"), "Expected regular application processes to remain eligible.");
+}
+
+static void HideEventsMapToHideUpdate()
+{
+	AssertEqual(WindowUpdateType.Hide, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE), "Expected a hidden window to be removed from Stage Manager.");
+	AssertEqual(WindowUpdateType.Hide, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED), "Expected a cloaked window to be treated as hidden.");
+	AssertEqual(null, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_SHOW), "Expected window-show registration to remain a separate lifecycle path.");
 }
 
 static StageLayoutItem<string>[] Items(params (string Name, int Weight)[] items)

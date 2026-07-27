@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -228,6 +229,14 @@ namespace StageManager.Native
 			if (ignoreClasses.Contains(Class))
 				return false;
 
+			if (IsIgnoredProcess(ProcessName))
+				return false;
+
+			return true;
+		}
+
+		internal static bool IsIgnoredProcess(string processName)
+		{
 			var ignoreProcesses = new List<string>()
 			{
 				"SearchUI",
@@ -238,13 +247,12 @@ namespace StageManager.Native
 				"SearchApp",
 				"SearchHost", // Windows 11 search
 				"search", // Windows 11 RTM search
-				"ScreenClippingHost"
+				"ScreenClippingHost",
+				"TextInputHost", // Windows 11 emoji, clipboard and voice-typing panels
+				"InputApp" // Windows 10 touch keyboard and emoji panel
 			};
 
-			if (ignoreProcesses.Contains(ProcessName))
-				return false;
-
-			return true;
+			return ignoreProcesses.Any(name => string.Equals(name, processName, StringComparison.OrdinalIgnoreCase));
 		}
 
 		public bool IsFocused => Win32.GetForegroundWindow() == _handle;
