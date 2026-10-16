@@ -4,6 +4,7 @@
     {
         Show,
         Hide,
+        Cloak,
         MinimizeStart,
         MinimizeEnd,
         Foreground,

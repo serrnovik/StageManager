@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using StageManager.Native.PInvoke;
 using StageManager.Native.Window;
 
@@ -23,9 +21,6 @@ namespace StageManager.Native
 		private readonly List<IntPtr> _winEventHooks = new List<IntPtr>();
 
 		private WindowsWindow? _mouseMoveWindow;
-		private readonly object _mouseMoveLock = new object();
-		private Win32.HookProc? _mouseHook;
-		private IntPtr _mouseHookHandle;
 
 		private Dictionary<WindowsWindow, bool> _floating;
 		private IntPtr _currentProcessWindowHandle;
@@ -91,8 +86,6 @@ namespace StageManager.Native
 			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_SYSTEM_DESKTOPSWITCH, Win32.EVENT_CONSTANTS.EVENT_SYSTEM_DESKTOPSWITCH);
 			RegisterWinEventHook(Win32.EVENT_CONSTANTS.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_CONSTANTS.EVENT_OBJECT_LOCATIONCHANGE);
 
-			_mouseHook = MouseHook;
-
 			Win32.EnumWindows((handle, param) =>
 			{
 				if (Win32Helper.IsAppWindow(handle))
@@ -101,19 +94,6 @@ namespace StageManager.Native
 				}
 				return true;
 			}, IntPtr.Zero);
-
-			var thread = new Thread(() =>
-			{
-				if (_mouseHook is not null)
-				{
-					var baseAddress = currentProcess.MainModule?.BaseAddress ?? IntPtr.Zero;
-					_mouseHookHandle = Win32.SetWindowsHookEx(Win32.WH_MOUSE_LL, _mouseHook, baseAddress, 0);
-				}
-				Application.Run();
-			});
-
-			thread.Name = "WindowsManager";
-			thread.Start();
 
 			return Task.CompletedTask;
 		}
@@ -126,12 +106,6 @@ namespace StageManager.Native
 				Win32.UnhookWinEvent(hook);
 
 			_winEventHooks.Clear();
-
-			if (_mouseHookHandle != IntPtr.Zero)
-			{
-				Win32.UnhookWindowsHookEx(_mouseHookHandle);
-				_mouseHookHandle = IntPtr.Zero;
-			}
 		}
 
 		private void RegisterWinEventHook(Win32.EVENT_CONSTANTS eventMin, Win32.EVENT_CONSTANTS eventMax)
@@ -171,14 +145,6 @@ namespace StageManager.Native
 			}
 		}
 
-		private IntPtr MouseHook(int nCode, UIntPtr wParam, IntPtr lParam)
-		{
-			if (nCode == 0 && (uint)wParam == Win32.WM_LBUTTONUP)
-				HandleWindowMoveEnd();
-
-			return Win32.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
-		}
-
 		private void WindowHook(IntPtr hWinEventHook, Win32.EVENT_CONSTANTS eventType, IntPtr hwnd, Win32.OBJID idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
 		{
 			if (!_active)
@@ -192,6 +158,12 @@ namespace StageManager.Native
 
 			if (EventWindowIsValid(idChild, idObject, hwnd))
 			{
+				// out-of-context events are queued, so a foreground event can arrive after focus has
+				// already moved on (e.g. while minimizing windows during a scene switch). Acting on such
+				// a stale event would switch to a scene the user never asked for.
+				if (eventType == Win32.EVENT_CONSTANTS.EVENT_SYSTEM_FOREGROUND && IsStaleForegroundEvent(hwnd, Win32.GetForegroundWindow()))
+					return;
+
 				if (GetWindowUpdateType(eventType) is WindowUpdateType updateType)
 				{
 					UpdateWindow(hwnd, updateType);
@@ -219,9 +191,12 @@ namespace StageManager.Native
 			}
 		}
 
+		internal static bool IsStaleForegroundEvent(IntPtr eventWindow, IntPtr currentForegroundWindow) => eventWindow != currentForegroundWindow;
+
 		internal static WindowUpdateType? GetWindowUpdateType(Win32.EVENT_CONSTANTS eventType) => eventType switch
 		{
-			Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE or Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED => WindowUpdateType.Hide,
+			Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE => WindowUpdateType.Hide,
+			Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED => WindowUpdateType.Cloak,
 			Win32.EVENT_CONSTANTS.EVENT_OBJECT_UNCLOAKED => WindowUpdateType.Show,
 			Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZESTART => WindowUpdateType.MinimizeStart,
 			Win32.EVENT_CONSTANTS.EVENT_SYSTEM_MINIMIZEEND => WindowUpdateType.MinimizeEnd,
@@ -234,20 +209,25 @@ namespace StageManager.Native
 			return idChild == Win32.CHILDID_SELF && idObject == Win32.OBJID.OBJID_WINDOW && hwnd != IntPtr.Zero;
 		}
 
-		private void RegisterWindow(IntPtr handle, bool emitEvent = true)
+		/// <returns>true if the window was newly registered by this call</returns>
+		private bool RegisterWindow(IntPtr handle, bool emitEvent = true)
 		{
 			if (!_active)
-				return;
+				return false;
 
 			if (handle == _currentProcessWindowHandle)
-				return;
+				return false;
 
 			if (!_windows.ContainsKey(handle))
 			{
+				// cheap checks first, constructing a WindowsWindow queries the owning process
+				if (!Win32Helper.IsAppWindow(handle) || !Win32Helper.IsAltTabWindow(handle))
+					return false;
+
 				var window = new WindowsWindow(handle);
 
 				if (window.ProcessId < 0 || window.ProcessId == _currentProcessId)
-					return;
+					return false;
 
 				if (window.IsCandidate())
 				{
@@ -261,8 +241,12 @@ namespace StageManager.Native
 					{
 						HandleWindowAdd(window, true);
 					}
+
+					return true;
 				}
 			}
+
+			return false;
 		}
 
 		private void UnregisterWindow(IntPtr handle)
@@ -304,14 +288,23 @@ namespace StageManager.Native
 					WindowUpdated?.Invoke(window, type);
 				}
 			}
+			else if (type == WindowUpdateType.Cloak)
+			{
+				// cloaking happens on virtual desktop switches, for suspended UWP apps and some shell panels.
+				// The window still exists, so it keeps its scene; desktop filtering decides whether it is shown.
+				return;
+			}
 			else if (_windows.ContainsKey(handle))
 			{
 				var window = _windows[handle];
 				WindowUpdated?.Invoke(window, type);
 			}
-			else
+			else if (type == WindowUpdateType.Foreground)
 			{
-				UntrackedFocus?.Invoke(this, handle);
+				// windows that were not candidates when they were shown (no title yet, too small, ...)
+				// get a second chance when they are activated
+				if (!RegisterWindow(handle))
+					UntrackedFocus?.Invoke(this, handle);
 			}
 		}
 
@@ -398,16 +391,13 @@ namespace StageManager.Native
 			if (!_active)
 				return;
 
-			lock (_mouseMoveLock)
+			if (_mouseMoveWindow != null)
 			{
-				if (_mouseMoveWindow != null)
-				{
-					var window = _mouseMoveWindow;
-					_mouseMoveWindow = null;
+				var window = _mouseMoveWindow;
+				_mouseMoveWindow = null;
 
-					window.IsMouseMoving = false;
-					WindowMoved?.Invoke(window, EventArgs.Empty);
-				}
+				window.IsMouseMoving = false;
+				WindowMoved?.Invoke(window, EventArgs.Empty);
 			}
 		}
 

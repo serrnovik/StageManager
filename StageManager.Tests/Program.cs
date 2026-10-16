@@ -19,7 +19,11 @@ var tests = new (string Name, Action Test)[]
 	("Legacy startup shortcut counts as startup", LegacyStartupShortcutCountsAsStartup),
 	("Disabling startup removes registry value and legacy shortcut", DisablingStartupRemovesAllRegistrations),
 	("Text input shell processes are ignored", TextInputShellProcessesAreIgnored),
-	("Hide events map to a hide update", HideEventsMapToHideUpdate)
+	("Hide events map to a hide update", HideEventsMapToHideUpdate),
+	("Cloak events do not remove windows", CloakEventsDoNotRemoveWindows),
+	("Stale foreground events are detected", StaleForegroundEventsAreDetected),
+	("Reentrancy only blocks the recently left scene", ReentrancyOnlyBlocksRecentlyLeftScene),
+	("Current desktop is decided by majority", CurrentDesktopIsDecidedByMajority)
 };
 
 foreach (var test in tests)
@@ -157,8 +161,43 @@ static void TextInputShellProcessesAreIgnored()
 static void HideEventsMapToHideUpdate()
 {
 	AssertEqual(WindowUpdateType.Hide, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_HIDE), "Expected a hidden window to be removed from Stage Manager.");
-	AssertEqual(WindowUpdateType.Hide, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED), "Expected a cloaked window to be treated as hidden.");
 	AssertEqual(null, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_SHOW), "Expected window-show registration to remain a separate lifecycle path.");
+}
+
+static void CloakEventsDoNotRemoveWindows()
+{
+	AssertEqual(WindowUpdateType.Cloak, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_CLOAKED), "Expected cloaking (virtual desktop switch, suspended app) to be distinct from hiding.");
+	AssertEqual(WindowUpdateType.Show, WindowsManager.GetWindowUpdateType(Win32.EVENT_CONSTANTS.EVENT_OBJECT_UNCLOAKED), "Expected uncloaking to show the window.");
+}
+
+static void StaleForegroundEventsAreDetected()
+{
+	AssertTrue(WindowsManager.IsStaleForegroundEvent(new IntPtr(1), new IntPtr(2)), "Expected a foreground event for a window that lost the focus again to be stale.");
+	AssertTrue(!WindowsManager.IsStaleForegroundEvent(new IntPtr(1), new IntPtr(1)), "Expected a foreground event for the current foreground window to be current.");
+}
+
+static void ReentrancyOnlyBlocksRecentlyLeftScene()
+{
+	var left = Guid.NewGuid();
+	var current = Guid.NewGuid();
+	var other = Guid.NewGuid();
+	var now = DateTime.UtcNow;
+
+	AssertTrue(SceneManager.IsReentrancy(left, current, left, now.AddMilliseconds(-200), now), "Expected an app re-activating the scene just left to be blocked.");
+	AssertTrue(!SceneManager.IsReentrancy(left, current, left, now.AddSeconds(-2), now), "Expected the block to expire.");
+	AssertTrue(!SceneManager.IsReentrancy(other, current, left, now, now), "Expected other scenes not to be blocked.");
+	AssertTrue(!SceneManager.IsReentrancy(current, current, current, now, now), "Expected the current scene never to be blocked.");
+	AssertTrue(!SceneManager.IsReentrancy(left, current, null, now, now), "Expected no block without a recently left scene.");
+}
+
+static void CurrentDesktopIsDecidedByMajority()
+{
+	var a = Guid.NewGuid();
+	var b = Guid.NewGuid();
+
+	AssertEqual<Guid?>(a, VirtualDesktopManager.PickMostCommonDesktopId(new[] { b, a, a, Guid.Empty, Guid.Empty, Guid.Empty }), "Expected the most common non-empty desktop id to win.");
+	AssertEqual<Guid?>(null, VirtualDesktopManager.PickMostCommonDesktopId(new[] { Guid.Empty }), "Expected empty desktop ids to be ignored.");
+	AssertEqual<Guid?>(null, VirtualDesktopManager.PickMostCommonDesktopId(Array.Empty<Guid>()), "Expected no desktop id without votes.");
 }
 
 static StageLayoutItem<string>[] Items(params (string Name, int Weight)[] items)

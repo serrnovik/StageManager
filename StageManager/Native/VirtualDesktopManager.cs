@@ -44,20 +44,49 @@ namespace StageManager.Native
 
 		public Guid? GetCurrentDesktopId(IEnumerable<IntPtr> candidateWindowHandles, IntPtr excludedWindowHandle = default)
 		{
-			var foregroundHandle = Win32.GetForegroundWindow();
-			if (TryRememberCurrentDesktopId(foregroundHandle, excludedWindowHandle, requireVisible: true, out var currentDesktopId))
-				return currentDesktopId;
-
-			foreach (var handle in candidateWindowHandles.Where(h => h != IntPtr.Zero).Distinct())
+			// The foreground window is a poor witness: shell panels (Start, Win+., notifications) and windows
+			// pinned to all desktops report desktop ids that are not the current desktop. So known app windows
+			// that Windows confirms to be on the current desktop vote first, the foreground window is a fallback.
+			var votes = new List<Guid>();
+			foreach (var handle in candidateWindowHandles.Where(h => h != IntPtr.Zero && h != excludedWindowHandle).Distinct())
 			{
-				if (TryRememberCurrentDesktopId(handle, excludedWindowHandle, requireVisible: true, out currentDesktopId))
-					return currentDesktopId;
+				if (TryGetDesktopIdOfCurrentDesktopWindow(handle, out var desktopId))
+					votes.Add(desktopId);
+
+				if (votes.Count >= MAX_DESKTOP_VOTES)
+					break;
 			}
 
-			if (TryRememberCurrentDesktopId(foregroundHandle, excludedWindowHandle, requireVisible: false, out currentDesktopId))
-				return currentDesktopId;
+			if (PickMostCommonDesktopId(votes) is Guid votedDesktopId)
+				return _lastKnownCurrentDesktopId = votedDesktopId;
+
+			var foregroundHandle = Win32.GetForegroundWindow();
+			if (foregroundHandle != excludedWindowHandle && TryGetDesktopIdOfCurrentDesktopWindow(foregroundHandle, out var foregroundDesktopId))
+				return _lastKnownCurrentDesktopId = foregroundDesktopId;
 
 			return _lastKnownCurrentDesktopId;
+		}
+
+		private const int MAX_DESKTOP_VOTES = 5;
+
+		internal static Guid? PickMostCommonDesktopId(IEnumerable<Guid> desktopIds)
+		{
+			return desktopIds
+				.Where(id => id != Guid.Empty)
+				.GroupBy(id => id)
+				.OrderByDescending(group => group.Count())
+				.Select(group => (Guid?)group.Key)
+				.FirstOrDefault();
+		}
+
+		private bool TryGetDesktopIdOfCurrentDesktopWindow(IntPtr windowHandle, out Guid desktopId)
+		{
+			desktopId = default;
+
+			if (!IsWindowOnCurrentDesktop(windowHandle))
+				return false;
+
+			return TryGetWindowDesktopId(windowHandle, out desktopId) && desktopId != Guid.Empty;
 		}
 
 		public bool IsWindowOnCurrentDesktop(IntPtr windowHandle)
@@ -89,23 +118,6 @@ namespace StageManager.Native
 		{
 			desktopId = default;
 			return windowHandle != IntPtr.Zero && _manager.GetWindowDesktopId(windowHandle, out desktopId) == 0;
-		}
-
-		private bool TryRememberCurrentDesktopId(IntPtr windowHandle, IntPtr excludedWindowHandle, bool requireVisible, out Guid desktopId)
-		{
-			desktopId = default;
-
-			if (windowHandle == IntPtr.Zero || windowHandle == excludedWindowHandle)
-				return false;
-
-			if (requireVisible && Win32Helper.IsCloaked(windowHandle))
-				return false;
-
-			if (!TryGetWindowDesktopId(windowHandle, out desktopId))
-				return false;
-
-			_lastKnownCurrentDesktopId = desktopId;
-			return true;
 		}
 
 		[ComImport]

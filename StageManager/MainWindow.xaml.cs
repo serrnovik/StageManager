@@ -63,7 +63,7 @@ namespace StageManager
 		private WindowMode _mode;
 		private double _lastWidth;
 		private int _visibleSceneCapacity = FALLBACK_VISIBLE_SCENES;
-		private Timer _overlapCheckTimer;
+		private readonly DispatcherTimer _overlapCheckTimer;
 		private Point _mouse = new Point(0, 0);
 		private SceneModel? _removedCurrentScene;
 		private SceneModel? _mouseDownScene;
@@ -91,7 +91,9 @@ namespace StageManager
 
 			DataContext = this;
 
-			_overlapCheckTimer = new Timer(OverlapCheck, null, Timeout.Infinite, Timeout.Infinite);
+			// all scene and virtual desktop (COM) state is owned by the UI thread, so the periodic check runs there too
+			_overlapCheckTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(TIMERINTERVAL_MILLISECONDS) };
+			_overlapCheckTimer.Tick += (_, _) => OverlapCheck();
 			SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
 			SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
 			SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
@@ -170,11 +172,12 @@ namespace StageManager
 			UnregisterGlobalHotkeys();
 			_hwndSource?.RemoveHook(WndProc);
 			StopHook();
-			_overlapCheckTimer.Dispose();
+			_overlapCheckTimer.Stop();
 
 			trayIcon.Dispose();
 
 			SceneManager?.Stop();
+			App.SceneManager = null;
 
 			base.OnClosed(e);
 
@@ -189,6 +192,7 @@ namespace StageManager
 
 			var windowsManager = new WindowsManager();
 			SceneManager = new SceneManager(windowsManager);
+			App.SceneManager = SceneManager;
 			await SceneManager.Start().ConfigureAwait(true);
 
 			SceneManager.SceneChanged += SceneManager_SceneChanged;
@@ -208,7 +212,7 @@ namespace StageManager
 			OnPropertyChanged(nameof(IsStageManagerEnabled));
 			OnPropertyChanged(nameof(StageManagerStatus));
 			StartHook();
-			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+			StartOverlapCheck();
 			RecalculatePanelLayout(forceVisibilitySync: true);
 			EnsureStageManagerOnCurrentDesktop();
 		}
@@ -365,7 +369,7 @@ namespace StageManager
 		{
 			// if it's allowed to drag windows into scenes, we cannot hide the scenes
 			if (EnableWindowDropToScene)
-				_overlapCheckTimer.Change(TimeSpan.Zero, TimeSpan.Zero);
+				StopOverlapCheck();
 
 			var foregroundWindow = Win32.GetForegroundWindow();
 			if (foregroundWindow != _thisHandle)
@@ -386,7 +390,7 @@ namespace StageManager
 			// if it's allowed to drag windows into scenes, we cannot hide the scenes
 			if (EnableWindowDropToScene)
 			{
-				_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+				StartOverlapCheck();
 
 				var foregroundWindow = Win32.GetForegroundWindow();
 
@@ -774,7 +778,31 @@ namespace StageManager
 			}
 		}
 
-		private void OverlapCheck(object? _)
+		private void StartOverlapCheck()
+		{
+			if (!Dispatcher.CheckAccess())
+			{
+				Dispatcher.BeginInvoke(StartOverlapCheck);
+				return;
+			}
+
+			_overlapCheckTimer.Stop();
+			_overlapCheckTimer.Start();
+			Dispatcher.BeginInvoke(OverlapCheck, DispatcherPriority.Background);
+		}
+
+		private void StopOverlapCheck()
+		{
+			if (!Dispatcher.CheckAccess())
+			{
+				Dispatcher.BeginInvoke(StopOverlapCheck);
+				return;
+			}
+
+			_overlapCheckTimer.Stop();
+		}
+
+		private void OverlapCheck()
 		{
 			if (!IsStageManagerEnabled || SceneManager is null)
 				return;
@@ -966,11 +994,11 @@ namespace StageManager
 				EnsureStageManagerOnCurrentDesktop();
 				await SceneManager.Enable().ConfigureAwait(true);
 				StartHook();
-				_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+				StartOverlapCheck();
 			}
 			else
 			{
-				_overlapCheckTimer.Change(Timeout.Infinite, Timeout.Infinite);
+				StopOverlapCheck();
 				StopHook();
 				SceneManager.Disable();
 				Hide();
@@ -1128,7 +1156,7 @@ namespace StageManager
 			ShowStageManagerWindow();
 			EnsureStageManagerOnCurrentDesktop();
 			Mode = WindowMode.Flyover;
-			_overlapCheckTimer.Change(0, TIMERINTERVAL_MILLISECONDS);
+			StartOverlapCheck();
 		}
 
 		private void ShowStageManagerWindow()

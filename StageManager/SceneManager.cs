@@ -18,7 +18,10 @@ namespace StageManager
 		private Scene? _current;
 		private bool _suspend = false;
 		private bool _enabled = true;
-		private Guid? _reentrancyLockSceneId;
+		private Guid? _recentlyLeftSceneId;
+		private DateTime _recentlyLeftSceneUtc = DateTime.MinValue;
+		private readonly HashSet<IntPtr> _minimizedByStageManager = new HashSet<IntPtr>();
+		private static readonly TimeSpan ReentrancyWindow = TimeSpan.FromSeconds(1);
 		private IntPtr _currentWindowHandle = IntPtr.Zero;
 		private readonly VirtualDesktopManager _virtualDesktopManager = new VirtualDesktopManager();
 
@@ -85,6 +88,9 @@ namespace StageManager
 			await SwitchTo(scene).ConfigureAwait(true);
 		}
 
+		/// <summary>
+		/// Restores the windows Stage Manager minimized itself. Windows the user minimized stay minimized.
+		/// </summary>
 		private void ShowAllWindows()
 		{
 			if (_scenes is null)
@@ -92,9 +98,40 @@ namespace StageManager
 
 			foreach (var scene in _scenes)
 			{
-				foreach (var w in scene.Windows)
+				foreach (var w in scene.Windows.Where(w => _minimizedByStageManager.Contains(w.Handle)))
 					WindowStrategy.Show(w);
 			}
+
+			_minimizedByStageManager.Clear();
+		}
+
+		/// <summary>
+		/// Restores minimized windows if the app is going down unexpectedly.
+		/// Only relies on the handle set, so it works even if the scene state is broken.
+		/// </summary>
+		internal void RestoreWindowsAfterCrash()
+		{
+			foreach (var handle in _minimizedByStageManager.ToArray())
+			{
+				if (Win32.IsWindow(handle) && Win32.IsIconic(handle))
+					Win32.ShowWindow(handle, Win32.SW.SW_SHOWNOACTIVATE);
+			}
+
+			_minimizedByStageManager.Clear();
+		}
+
+		private void ShowWindow(IWindow window)
+		{
+			_minimizedByStageManager.Remove(window.Handle);
+			WindowStrategy.Show(window);
+		}
+
+		private void HideWindow(IWindow window)
+		{
+			if (!window.IsMinimized)
+				_minimizedByStageManager.Add(window.Handle);
+
+			WindowStrategy.Hide(window);
 		}
 
 		private void WindowsManager_WindowUpdated(IWindow window, WindowUpdateType type)
@@ -104,6 +141,8 @@ namespace StageManager
 
 			if (type == WindowUpdateType.Foreground)
 				SwitchToSceneByWindow(window).SafeFireAndForget();
+			else if (type == WindowUpdateType.MinimizeEnd)
+				_minimizedByStageManager.Remove(window.Handle);
 		}
 
 		private void WindowsManager_UntrackedFocus(object? sender, IntPtr e)
@@ -111,10 +150,11 @@ namespace StageManager
 			if (_suspend || !_enabled)
 				return;
 
-			var ownerScene = FindSceneForOwnerWindow(e);
-			if (ownerScene is object)
+			if (FindOwnerWindow(e) is (Scene ownerScene, IWindow ownerWindow))
 			{
-				SwitchTo(ownerScene).SafeFireAndForget();
+				// keep the dialog's owner visible, not just any window of the owner's scene
+				if (!IsReentrancy(ownerScene))
+					SwitchTo(ownerScene, ownerWindow).SafeFireAndForget();
 				return;
 			}
 
@@ -130,6 +170,7 @@ namespace StageManager
 			if (!_enabled)
 				return;
 
+			_minimizedByStageManager.Remove(window.Handle);
 			var scene = FindSceneForWindow(window);
 
 			if (scene is not null)
@@ -162,7 +203,7 @@ namespace StageManager
 			return _scenes?.FirstOrDefault(s => string.Equals(s.Key, processName, StringComparison.OrdinalIgnoreCase));
 		}
 
-		private async void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
+		private void WindowsManager_WindowCreated(IWindow window, bool firstCreate)
 		{
 			if (!_enabled)
 				return;
@@ -170,7 +211,12 @@ namespace StageManager
 			if (!IsSceneableWindow(window))
 				return;
 
-			SwitchToSceneByNewWindow(window).SafeFireAndForget();
+			var scene = AddToScene(window);
+
+			// a new window only takes over the stage if it actually got the focus,
+			// background apps opening windows must not minimize what the user is working on
+			if (!_suspend && window.IsFocused)
+				SwitchTo(scene, window).SafeFireAndForget();
 		}
 
 		private async Task SwitchToSceneByWindow(IWindow window)
@@ -178,60 +224,58 @@ namespace StageManager
 			var scene = FindSceneForWindow(window);
 			if (scene is null)
 			{
-				scene = new Scene(GetWindowGroupKey(window), window);
-				_scenes?.Add(scene);
-				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Created));
+				if (!IsSceneableWindow(window))
+					return;
+
+				scene = AddToScene(window);
 			}
 
-			await SwitchTo(scene, window);
-		}
-
-		private async Task SwitchToSceneByNewWindow(IWindow window)
-		{
-			var existentScene = FindSceneForProcess(GetWindowGroupKey(window));
-			var scene = existentScene ?? new Scene(window.ProcessName, window);
-
-			if (existentScene is null)
-			{
-				_scenes?.Add(scene);
-				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Created));
-			}
-			else
-			{
-				scene.Add(window);
-				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Updated));
-			}
+			if (IsReentrancy(scene))
+				return;
 
 			await SwitchTo(scene, window).ConfigureAwait(true);
 		}
 
-		/// <summary>
-		/// Determines if a scene is switched back to shortly after it has been hidden.
-		/// This can happen if an app activates one of it's windows after being hidde,
-		/// like Microsoft Teams does if there's a small floating window for a current call.
-		/// </summary>
-		/// <param name="scene"></param>
-		/// <returns></returns>
-		private bool IsReentrancy(Scene? scene)
+		private Scene AddToScene(IWindow window)
 		{
-			if (scene is null)
-				return false;
+			if (FindSceneForWindow(window) is Scene existing)
+				return existing;
 
-			if (Guid.Equals(scene.Id, _reentrancyLockSceneId))
-				return true;
+			var existentScene = FindSceneForProcess(GetWindowGroupKey(window));
 
-			if (_current is object)
+			if (existentScene is null)
 			{
-				_reentrancyLockSceneId = _current.Id;
-
-				Task.Run(async () =>
-				{
-					await Task.Delay(1000).ConfigureAwait(false);
-					_reentrancyLockSceneId = null;
-				}).SafeFireAndForget();
+				var scene = new Scene(GetWindowGroupKey(window), window);
+				_scenes?.Add(scene);
+				SceneChanged?.Invoke(this, new SceneChangedEventArgs(scene, window, ChangeType.Created));
+				return scene;
 			}
 
-			return false;
+			existentScene.Add(window);
+			SceneChanged?.Invoke(this, new SceneChangedEventArgs(existentScene, window, ChangeType.Updated));
+			return existentScene;
+		}
+
+		/// <summary>
+		/// Determines if a scene is activated by an app shortly after Stage Manager switched away from it.
+		/// This can happen if an app activates one of it's windows after being hidden,
+		/// like Microsoft Teams does if there's a small floating window for a current call.
+		/// Only used for switches caused by window events, explicit user switches are never blocked.
+		/// </summary>
+		private bool IsReentrancy(Scene? scene)
+		{
+			return IsReentrancy(scene?.Id, _current?.Id, _recentlyLeftSceneId, _recentlyLeftSceneUtc, DateTime.UtcNow);
+		}
+
+		internal static bool IsReentrancy(Guid? targetSceneId, Guid? currentSceneId, Guid? recentlyLeftSceneId, DateTime recentlyLeftUtc, DateTime nowUtc)
+		{
+			if (targetSceneId is null || recentlyLeftSceneId is null)
+				return false;
+
+			if (targetSceneId == currentSceneId)
+				return false;
+
+			return targetSceneId == recentlyLeftSceneId && nowUtc - recentlyLeftUtc < ReentrancyWindow;
 		}
 
 		public async Task<IWindow?> SwitchTo(Scene? scene, IWindow? selectedWindow = null, bool cycleSameScene = false)
@@ -248,20 +292,23 @@ namespace StageManager
 			if (isSameScene && activeSceneWindow?.Handle == _currentWindowHandle)
 				return activeSceneWindow;
 
-			if (!isSameScene && IsReentrancy(scene))
-				return null;
-
 			try
 			{
 				_suspend = true;
 
 				var visibleSceneWindows = activeSceneWindow is null ? Array.Empty<IWindow>() : new[] { activeSceneWindow };
 				var otherWindows = GetSceneableWindows(currentDesktopId)
-					.Except(visibleSceneWindows)
+					.Where(w => !visibleSceneWindows.Any(v => v.Handle == w.Handle))
 					.Where(w => !w.HasVisibleOwnedPopup)
 					.ToArray();
 
 				var prior = _current;
+				if (prior is object && !object.Equals(prior, scene))
+				{
+					_recentlyLeftSceneId = prior.Id;
+					_recentlyLeftSceneUtc = DateTime.UtcNow;
+				}
+
 				_current = scene;
 				_currentWindowHandle = activeSceneWindow?.Handle ?? IntPtr.Zero;
 
@@ -274,11 +321,17 @@ namespace StageManager
 				if (scene is object)
 				{
 					foreach (var w in visibleSceneWindows)
-						WindowStrategy.Show(w);
+						ShowWindow(w);
 				}
 
+				// if the focused window is about to be minimized, hand the focus to the new scene first.
+				// Otherwise Windows activates an arbitrary window, possibly one of another scene.
+				var foreground = Win32.GetForegroundWindow();
+				if (activeSceneWindow is object && otherWindows.Any(w => w.Handle == foreground))
+					activeSceneWindow.Focus();
+
 				foreach (var o in otherWindows)
-					WindowStrategy.Hide(o);
+					HideWindow(o);
 
 				CurrentSceneSelectionChanged?.Invoke(this, new CurrentSceneSelectionChangedEventArgs(prior, _current));
 
@@ -350,12 +403,12 @@ namespace StageManager
 
 				if (targetScene.Equals(_current))
 				{
-					WindowStrategy.Show(window);
+					ShowWindow(window);
 					window.Focus();
 				}
 				else
 				{
-					WindowStrategy.Hide(window);
+					HideWindow(window);
 
 					// reset window position after move so that the window is back at the starting position on the new scene
 					if (window is WindowsWindow w && w.PopLastLocation() is IWindowLocation l)
@@ -532,17 +585,26 @@ namespace StageManager
 
 		private bool IsLiveWindow(IWindow window) => window.Handle != IntPtr.Zero && Win32.IsWindow(window.Handle);
 
-		private Scene? FindSceneForOwnerWindow(IntPtr handle)
+		private (Scene Scene, IWindow Window)? FindOwnerWindow(IntPtr handle)
 		{
 			var ownerHandle = Win32.GetWindow(handle, Win32.GW.GW_OWNER);
-			if (ownerHandle != IntPtr.Zero && FindSceneForWindow(ownerHandle) is Scene ownerScene)
-				return ownerScene;
+			if (FindTrackedWindow(ownerHandle) is (Scene, IWindow) owner)
+				return owner;
 
 			var rootOwnerHandle = Win32.GetAncestor(handle, Win32.GA.GA_ROOTOWNER);
-			if (rootOwnerHandle != IntPtr.Zero && rootOwnerHandle != handle)
-				return FindSceneForWindow(rootOwnerHandle);
+			if (rootOwnerHandle != handle && FindTrackedWindow(rootOwnerHandle) is (Scene, IWindow) rootOwner)
+				return rootOwner;
 
 			return null;
+		}
+
+		private (Scene Scene, IWindow Window)? FindTrackedWindow(IntPtr handle)
+		{
+			if (handle == IntPtr.Zero || FindSceneForWindow(handle) is not Scene scene)
+				return null;
+
+			var window = scene.Windows.FirstOrDefault(w => w.Handle == handle);
+			return window is null ? null : (scene, window);
 		}
 	}
 }
