@@ -197,8 +197,9 @@ namespace StageManager.Native
 			var isToolWindow = exStyle.HasFlag(Win32.WS_EX.WS_EX_TOOLWINDOW);
 			var isTopMost = exStyle.HasFlag(Win32.WS_EX.WS_EX_TOPMOST);
 
+			// always-on-top windows float above every scene instead of being part of one
 			return (isPopup && !hasNormalFrame && (!advertisesAsApp || isNoActivate || isToolWindow))
-				|| (isTopMost && advertisesAsApp && !hasSystemMenu);
+				|| isTopMost;
 		}
 
 		private bool HasUsableWindowSize()
@@ -249,7 +250,15 @@ namespace StageManager.Native
 				"search", // Windows 11 RTM search
 				"ScreenClippingHost",
 				"TextInputHost", // Windows 11 emoji, clipboard and voice-typing panels
-				"InputApp" // Windows 10 touch keyboard and emoji panel
+				"InputApp", // Windows 10 touch keyboard and emoji panel
+				// PowerToys pop-ups act on the window below them, so they must not get a scene of their own
+				"PowerToys.AdvancedPaste",
+				"PowerToys.PowerLauncher",
+				"PowerToys.ColorPickerUI",
+				"PowerToys.PowerOCR",
+				"PowerToys.MeasureToolUI",
+				"PowerToys.QuickAccent",
+				"PowerToys.ShortcutGuide"
 			};
 
 			return ignoreProcesses.Any(name => string.Equals(name, processName, StringComparison.OrdinalIgnoreCase));

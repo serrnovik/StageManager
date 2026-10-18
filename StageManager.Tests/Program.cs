@@ -155,6 +155,7 @@ static void TextInputShellProcessesAreIgnored()
 {
 	AssertTrue(WindowsWindow.IsIgnoredProcess("TextInputHost"), "Expected Windows 11 text-input panels to be ignored.");
 	AssertTrue(WindowsWindow.IsIgnoredProcess("InputApp"), "Expected Windows 10 input panels to be ignored.");
+	AssertTrue(WindowsWindow.IsIgnoredProcess("PowerToys.AdvancedPaste"), "Expected PowerToys pop-ups to be ignored.");
 	AssertTrue(!WindowsWindow.IsIgnoredProcess("notepad"), "Expected regular application processes to remain eligible.");
 }
 

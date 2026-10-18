@@ -1,3 +1,4 @@
+using StageManager.Native;
 using StageManager.Native.Interop;
 using StageManager.Native.PInvoke;
 using System;
@@ -5,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace StageManager
 {
@@ -78,13 +80,26 @@ namespace StageManager
 
 		private void DwmThumbnail_Loaded(object sender, RoutedEventArgs e)
 		{
+			WindowSnapshotCache.SnapshotChanged -= WindowSnapshotCache_SnapshotChanged;
+			WindowSnapshotCache.SnapshotChanged += WindowSnapshotCache_SnapshotChanged;
 			StartCapture();
 			UpdateThumbnailProperties();
 		}
 
 		private void DwmThumbnail_Unloaded(object sender, RoutedEventArgs e)
 		{
+			WindowSnapshotCache.SnapshotChanged -= WindowSnapshotCache_SnapshotChanged;
 			ReleaseCapture();
+		}
+
+		private void WindowSnapshotCache_SnapshotChanged(IntPtr handle)
+		{
+			// the snapshot is taken right before the window gets minimized, so check again once that happened
+			Dispatcher.BeginInvoke(() =>
+			{
+				if (handle == PreviewHandle)
+					UpdateThumbnailProperties();
+			}, DispatcherPriority.Background);
 		}
 
 		private void DwmThumbnail_LayoutUpdated(object? sender, EventArgs e)
@@ -143,8 +158,20 @@ namespace StageManager
 
 		private void UpdateThumbnailProperties()
 		{
+			var snapshot = PreviewHandle != IntPtr.Zero && Win32.IsIconic(PreviewHandle) ? WindowSnapshotCache.Get(PreviewHandle) : null;
+			if (!ReferenceEquals(snapshotImage.Source, snapshot))
+				snapshotImage.Source = snapshot;
+
 			if (_dwmThumbnail == IntPtr.Zero)
 				return;
+
+			if (snapshot is object)
+			{
+				UpdateThumbnailVisibility(false);
+				_lastThumbnailRect = null;
+				_lastSourceRect = null;
+				return;
+			}
 
 			var dpi = GetDpiScaleFactor();
 

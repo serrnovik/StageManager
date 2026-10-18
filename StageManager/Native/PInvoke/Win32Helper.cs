@@ -20,7 +20,9 @@ namespace StageManager.Native.PInvoke
 
         public static bool IsAppWindow(IntPtr hwnd)
         {
-            return (Win32.IsWindowVisible(hwnd) || Win32.IsIconic(hwnd)) &&
+            // minimized windows keep WS_VISIBLE, a hidden window (e.g. a tray app's minimized-and-hidden
+            // main window) must never be treated as an app window, showing it would surface it
+            return Win32.IsWindowVisible(hwnd) &&
                    !Win32.GetWindowExStyleLongPtr(hwnd).HasFlag(Win32.WS_EX.WS_EX_NOACTIVATE) &&
                    !Win32.GetWindowStyleLongPtr(hwnd).HasFlag(Win32.WS.WS_CHILD);
         }

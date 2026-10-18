@@ -129,7 +129,10 @@ namespace StageManager
 		private void HideWindow(IWindow window)
 		{
 			if (!window.IsMinimized)
+			{
 				_minimizedByStageManager.Add(window.Handle);
+				WindowSnapshotCache.Capture(window.Handle);
+			}
 
 			WindowStrategy.Hide(window);
 		}
@@ -171,6 +174,7 @@ namespace StageManager
 				return;
 
 			_minimizedByStageManager.Remove(window.Handle);
+			WindowSnapshotCache.Remove(window.Handle);
 			var scene = FindSceneForWindow(window);
 
 			if (scene is not null)

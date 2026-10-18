@@ -8,13 +8,15 @@ namespace StageManager.Strategies
 		public void Show(IWindow window)
 		{
 			// only restore minimized windows, calling ShowWindow on a visible (maximized) window may change its state
-			if (Win32.IsIconic(window.Handle))
+			// hidden windows (tray apps) stay hidden, ShowWindow would make them visible
+			if (Win32.IsIconic(window.Handle) && Win32.IsWindowVisible(window.Handle))
 				Win32.ShowWindow(window.Handle, Win32.SW.SW_SHOWNOACTIVATE);
 		}
 
 		public void Hide(IWindow window)
 		{
-			if (Win32.IsIconic(window.Handle))
+			// SW_SHOWMINNOACTIVE on a hidden window would show it as minimized
+			if (Win32.IsIconic(window.Handle) || !Win32.IsWindowVisible(window.Handle))
 				return;
 
 			// minimizing background windows must not move the activation around, which would emit

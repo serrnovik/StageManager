@@ -18,5 +18,11 @@
             <Rectangle
                 Fill="White" />
         </Border>
+        <!-- shown for minimized windows, DWM has nothing to render for them -->
+        <Image
+            x:Name="snapshotImage"
+            Stretch="UniformToFill"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center" />
     </Grid>
 </UserControl>
